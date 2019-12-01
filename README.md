@@ -39,7 +39,56 @@ fn factorial(input: u64) -> u64 {
 }
 ```
 
-For more detailed information, please see [the docs](https://docs.rs/tailcall).
+For more detailed information (including some limitations), please see [the docs](https://docs.rs/tailcall).
+
+## Implementation
+
+The core idea is to rewrite the function into a loop. Here is the (slightly reformatted) expansion for the `facotrial_inner` example above:
+
+```rust
+fn factorial_inner(accumulator: u64, input: u64) -> u64 {
+    mod ___tailcall___ {
+        pub enum Next<Input, Output> {
+            Recurse(Input),
+            Finish(Output),
+        }
+
+        pub use Next::*;
+
+        #[inline(always)]
+        pub fn run<Step, Input, Output>(step: Step, mut input: Input) -> Output
+            where Step: Fn(Input) -> Next<Input, Output>
+        {
+            loop {
+                match step(input) {
+                    Recurse(new_input) => {
+                        input = new_input;
+                        continue;
+                    },
+                    Finish(output) => {
+                        break output;
+                    }
+                }
+            }
+        }
+    }
+
+    ___tailcall___::run(
+        #[inline(always)] |(accumulator, input)| {
+            ___tailcall___::Finish({
+                if input > 0 {
+                    return ___tailcall___::Recurse((accumulator * input, input - 1))
+                } else {
+                    accumulator
+                }
+            })
+        },
+        (accumulator, input),
+    )
+}
+```
+
+You can view the exact expansion for the `tailcall` macro in your use-case with `cargo expand`.
 
 ## Development
 

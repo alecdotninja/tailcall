@@ -96,7 +96,7 @@ Development dependencies, testing, documentation generation, packaging, and dist
 
 After checking out the repo, run `cargo test` to verify the test suite.
 The latest documentation can be generated with `cargo doc`.
-Before commiting, please make sure code is formatted canonically with `cargo fmt`.
+Before commiting, please make sure code is formatted canonically with `cargo fmt` and passes all lints with `cargo clippy`.
 New versions are released to [crates.io](https://crates.io/crates/tailcall) with `cargo publish`.
 
 ## Contributing

@@ -49,4 +49,3 @@ fn test_memoized_factorial_correctness() {
     assert_eq!(memo.get(&3), Some(&4));
     assert_eq!(memo.get(&4), Some(&1));
 }
-

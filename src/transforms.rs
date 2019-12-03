@@ -55,12 +55,11 @@ impl FnTailcallTransformer {
     fn build_run_expr(&self, namespace_ident: &Ident, sig: &Signature, block: Block) -> Expr {
         let block = apply_fn_tailcall_body_transform(namespace_ident, &sig.ident, block);
 
-        let input_pat_idents = sig.input_pat_idents();
         let input_idents = sig.input_idents();
 
         parse_quote! {
             #namespace_ident::run(
-                #[inline(always)] |(#(#input_pat_idents),*)| {
+                #[inline(always)] |(#(#input_idents),*)| {
                     #namespace_ident::Finish(#block)
                 },
                 (#(#input_idents),*),

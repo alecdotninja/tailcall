@@ -1,6 +1,7 @@
 # Tailcall
 
 [![Build Status](https://travis-ci.org/alecdotninja/tailcall.svg?branch=master)](https://travis-ci.org/alecdotninja/tailcall)
+[![Current Crates.io Version](https://img.shields.io/crates/v/tailcall.svg)](https://crates.io/crates/tailcall)
 [![Docs](https://docs.rs/tailcall/badge.svg)](https://docs.rs/tailcall)
 
 Tailcall is a library that adds safe, zero-cost [tail recursion](https://en.wikipedia.org/wiki/Tail_call) to stable Rust.

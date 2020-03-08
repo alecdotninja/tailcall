@@ -16,7 +16,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-tailcall = "0.1"
+tailcall = "0.2"
 ```
 
 ## Usage
@@ -26,65 +26,36 @@ Add the `tailcall` attribute to functions which you would like to use tail recur
 ```rust
 use tailcall::tailcall;
 
-fn factorial(input: u64) -> u64 {
-    #[tailcall]
-    fn factorial_inner(accumulator: u64, input: u64) -> u64 {
-        if input > 0 {
-            factorial_inner(accumulator * input, input - 1)
-        } else {
-            accumulator
-        }
+#[tailcall]
+fn gcd(a: u64, b: u64) -> u64 {
+    if b == 0 {
+        a
+    } else {
+        gcd(b, a % b)
     }
-
-    factorial_inner(1, input)
 }
 ```
 
-For more detailed information (including some limitations), please see [the docs](https://docs.rs/tailcall).
+For more detailed information (including some limitations), please see [the docs](https://docs.rs/crates/tailcall).
 
 ## Implementation
 
-The core idea is to rewrite the function into a loop. Here is the (slightly reformatted) expansion for the `facotrial_inner` example above:
+The core idea is to rewrite the function into a loop using the [trampoline approach](https://en.wikipedia.org/wiki/Tail_call#Through_trampolining).
+Here is the (slightly reformatted) expansion for the `gcd` example above:
 
 ```rust
-fn factorial_inner(accumulator: u64, input: u64) -> u64 {
-    mod ___tailcall___ {
-        pub enum Next<Input, Output> {
-            Recurse(Input),
-            Finish(Output),
-        }
-
-        pub use Next::*;
-
-        #[inline(always)]
-        pub fn run<Step, Input, Output>(step: Step, mut input: Input) -> Output
-            where Step: Fn(Input) -> Next<Input, Output>
-        {
-            loop {
-                match step(input) {
-                    Recurse(new_input) => {
-                        input = new_input;
-                        continue;
-                    },
-                    Finish(output) => {
-                        break output;
-                    }
-                }
-            }
-        }
-    }
-
-    ___tailcall___::run(
-        #[inline(always)] |(accumulator, input)| {
-            ___tailcall___::Finish({
-                if input > 0 {
-                    return ___tailcall___::Recurse((accumulator * input, input - 1))
+fn gcd(a: u64, b: u64) -> u64 {
+    tailcall::trampoline::run(
+        #[inline(always)] |(a, b)| {
+            tailcall::trampoline::Finish({
+                if b == 0 {
+                    a
                 } else {
-                    accumulator
+                    return tailcall::trampoline::Recurse((b, a % b))
                 }
             })
         },
-        (accumulator, input),
+        (a, b),
     )
 }
 ```

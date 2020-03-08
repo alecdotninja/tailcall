@@ -1,4 +1,4 @@
-use proc_macro2::{Ident, Span};
+use proc_macro2::Ident;
 use syn::{fold::Fold, *};
 
 use super::helpers::*;
@@ -13,59 +13,6 @@ impl FnTailcallTransformer {
     pub fn new() -> Self {
         Self {}
     }
-
-    // TODO: It would be nice to export this from the crate instead of re-generating the
-    //       same code inside of each transformed function.
-    fn build_support_mod(&self) -> (Ident, ItemMod) {
-        // FIXME: Sadly, `Span::def_site()` is not yet stable, so choose an ident which
-        //        is unlikely to collide with user code.
-        let namespace_ident = Ident::new("___tailcall___", Span::call_site());
-
-        let support_mod = parse_quote! {
-            mod #namespace_ident {
-                pub enum Next<Input, Output> {
-                    Recurse(Input),
-                    Finish(Output),
-                }
-
-                pub use Next::*;
-
-                #[inline(always)]
-                pub fn run<Step, Input, Output>(step: Step, mut input: Input) -> Output
-                    where Step: Fn(Input) -> Next<Input, Output>
-                {
-                    loop {
-                        match step(input) {
-                            Recurse(new_input) => {
-                                input = new_input;
-                                continue;
-                            },
-                            Finish(output) => {
-                                break output;
-                            }
-                        }
-                    }
-                }
-            }
-        };
-
-        (namespace_ident, support_mod)
-    }
-
-    fn build_run_expr(&self, namespace_ident: &Ident, sig: &Signature, block: Block) -> Expr {
-        let block = apply_fn_tailcall_body_transform(namespace_ident, &sig.ident, block);
-
-        let input_idents = sig.input_idents();
-
-        parse_quote! {
-            #namespace_ident::run(
-                #[inline(always)] |(#(#input_idents),*)| {
-                    #namespace_ident::Finish(#block)
-                },
-                (#(#input_idents),*),
-            )
-        }
-    }
 }
 
 impl Fold for FnTailcallTransformer {
@@ -77,13 +24,18 @@ impl Fold for FnTailcallTransformer {
             block,
         } = item_fn;
 
-        let (namespace_ident, support_mod) = self.build_support_mod();
-        let run_expr = self.build_run_expr(&namespace_ident, &sig, *block);
+        let input_pat_idents = sig.input_pat_idents();
+        let input_idents = sig.input_idents();
+        let block = apply_fn_tailcall_body_transform(&sig.ident, *block);
 
         let block = parse_quote! {
             {
-                #support_mod
-                #run_expr
+                tailcall::trampoline::run(
+                    #[inline(always)] |(#(#input_pat_idents),*)| {
+                        tailcall::trampoline::Finish(#block)
+                    },
+                    (#(#input_idents),*),
+                )
             }
         };
 
@@ -96,25 +48,17 @@ impl Fold for FnTailcallTransformer {
     }
 }
 
-pub fn apply_fn_tailcall_body_transform(
-    namespace_ident: &Ident,
-    fn_name_ident: &Ident,
-    block: Block,
-) -> Block {
-    FnTailCallBodyTransformer::new(namespace_ident, fn_name_ident).fold_block(block)
+pub fn apply_fn_tailcall_body_transform(fn_name_ident: &Ident, block: Block) -> Block {
+    FnTailCallBodyTransformer::new(fn_name_ident).fold_block(block)
 }
 
 struct FnTailCallBodyTransformer<'a> {
-    namespace_ident: &'a Ident,
     fn_name_ident: &'a Ident,
 }
 
 impl<'a> FnTailCallBodyTransformer<'a> {
-    pub fn new(namespace_ident: &'a Ident, fn_name_ident: &'a Ident) -> Self {
-        Self {
-            namespace_ident,
-            fn_name_ident,
-        }
+    pub fn new(fn_name_ident: &'a Ident) -> Self {
+        Self { fn_name_ident }
     }
 
     // `fn(X)` => `return Recurse(X)`
@@ -123,11 +67,10 @@ impl<'a> FnTailCallBodyTransformer<'a> {
             if let Expr::Path(ExprPath { ref path, .. }) = **func {
                 if let Some(ident) = path.get_ident() {
                     if ident == self.fn_name_ident {
-                        let namespace_ident = self.namespace_ident;
                         let args = self.fold_expr_tuple(parse_quote! { (#args) });
 
                         return Some(parse_quote! {
-                            return #namespace_ident::Recurse(#args)
+                            return tailcall::trampoline::Recurse(#args)
                         });
                     }
                 }
@@ -151,11 +94,10 @@ impl<'a> FnTailCallBodyTransformer<'a> {
             };
 
             return self.try_rewrite_expr(expr).or_else(|| {
-                let namespace_ident = self.namespace_ident;
                 let expr = self.fold_expr(*expr.clone());
 
                 Some(parse_quote! {
-                    return #namespace_ident::Finish(#expr)
+                    return tailcall::trampoline::Finish(#expr)
                 })
             });
         }

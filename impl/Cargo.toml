@@ -1,12 +1,10 @@
 [package]
-name = "tailcall"
-description = "Safe, zero-cost tail recursion"
+name = "tailcall-impl"
+description = "The procedural macro implementation for the tailcall crate"
 documentation = "https://docs.rs/tailcall"
 repository = "https://github.com/alecdotninja/tailcall"
-readme = "README.md"
 keywords = ["recursion", "tail", "tailcall", "become"]
 categories = ["algorithms", "no-std"]
-exclude = ["/.travis.yml", ".gitignore"]
 license = "MIT OR Apache-2.0"
 authors = ["Alec Larsen <hello@alec.ninja>"]
 version = "0.1.4"
@@ -16,7 +14,9 @@ edition = "2018"
 travis-ci = { repository = "alecdotninja/tailcall" }
 
 [dependencies]
-tailcall-impl = { path = "impl", version = "0.1.4" }
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "1.0", features = ["full", "fold"] }
 
-[dev-dependencies]
-backtrace = "0.3.40"
+[lib]
+proc-macro = true

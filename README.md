@@ -71,6 +71,90 @@ The latest documentation can be generated with `cargo doc`.
 Before commiting, please make sure code is formatted canonically with `cargo fmt` and passes all lints with `cargo clippy`.
 New versions are released to [crates.io](https://crates.io/crates/tailcall) with `cargo publish`.
 
+## Benchmarks
+
+There are a few benchmarks available; currently the benchmarks demonstrate that for
+single-function tail-recursion, performance is the same as using a loop. Mutual
+recursion runs, but suffers penalties.
+
+```
+$ cargo bench
+    Finished bench [optimized] target(s) in 0.05s
+     Running target/release/deps/tailcall-b55b2bddb07cb046
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+     Running target/release/deps/bench-b8ab29e7ebef8d8d
+
+running 4 tests
+test bench_oddness_boom   ... bench:           6 ns/iter (+/- 0)
+test bench_oddness_loop   ... bench:           6 ns/iter (+/- 0)
+test bench_oddness_mutrec ... bench:   4,509,915 ns/iter (+/- 7,095,455)
+test bench_oddness_rec    ... bench:           3 ns/iter (+/- 0)
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 4 measured; 0 filtered out
+```
+
+If the optimization level is set to zero so that `bench_oddness_boom` isn't cleverly
+optimized away, it blows the stack as expected:
+
+```
+$ RUSTFLAGS="-C opt-level=0" cargo bench _boom
+    Finished bench [optimized] target(s) in 0.05s
+     Running target/release/deps/tailcall-b55b2bddb07cb046
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+     Running target/release/deps/bench-b8ab29e7ebef8d8d
+
+running 1 test
+
+thread 'main' has overflowed its stack
+fatal runtime error: stack overflow
+```
+
+In fact the same occurs when running `RUSTFLAGS="-C opt-level=0" cargo bench _mutrec`
+, indicating mutual recursion can also blow the stack, but the `loop` and tailrec-enabled
+single-function, tail-recursive functions enjoy TCO:
+
+```
+$ RUSTFLAGS="-C opt-level=0" cargo bench _loop
+    Finished bench [optimized] target(s) in 0.06s
+     Running target/release/deps/tailcall-b55b2bddb07cb046
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+     Running target/release/deps/bench-b8ab29e7ebef8d8d
+
+running 1 test
+test bench_oddness_loop   ... bench:   4,514,730 ns/iter (+/- 7,498,984)
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 1 measured; 3 filtered out
+
+
+$ RUSTFLAGS="-C opt-level=0" cargo bench _rec
+    Finished bench [optimized] target(s) in 0.05s
+     Running target/release/deps/tailcall-b55b2bddb07cb046
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+     Running target/release/deps/bench-b8ab29e7ebef8d8d
+
+running 1 test
+test bench_oddness_rec    ... bench:  22,416,962 ns/iter (+/- 16,083,896)
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 1 measured; 3 filtered out
+```
+
+
 ## Contributing
 
 Bug reports and pull requests are welcome on [GitHub](https://github.com/alecdotninja/tailcall).

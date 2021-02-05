@@ -69,3 +69,25 @@ where
         }
     }
 }
+
+/// Runs a step function aginast a particular input until it resolves to an output.
+#[inline(always)]
+pub fn run_res<StepFn, Input, Output, Err>(step: StepFn, mut input: Input) -> Result<Output, Err>
+where
+    StepFn: Fn(Input) -> Result<Next<Input, Output>, Err>,
+{
+    loop {
+        match step(input) {
+            Ok(Recurse(new_input)) => {
+                input = new_input;
+                continue;
+            }
+            Ok(Finish(output)) => {
+                break Ok(output);
+            }
+            Err(err) => {
+                break Err(err);
+            }
+        }
+    }
+}

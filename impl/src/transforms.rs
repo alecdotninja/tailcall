@@ -34,20 +34,23 @@ impl Fold for FnTailcallTransformer {
 
         let input_pat_idents = sig.input_pat_idents();
         let input_idents = sig.input_idents();
-        let block = apply_fn_tailcall_body_transform(&sig.ident, *block);
+        let block = apply_fn_tailcall_body_transform(&sig.ident, *block, &self.ret_type);
 
         let runner = match &self.ret_type {
             TailRetType::Default => quote!(tailcall::trampoline::run),
             TailRetType::Result => quote!(tailcall::trampoline::run_res),
         };
+
+        let wrap_ok = match &self.ret_type {
+            TailRetType::Default => quote!(),
+            TailRetType::Result => quote!(Ok),
+        };
  
-        // TODO: for run_res, need to somehow change return type of closure to be Result
-        // TODO: either in apply_fn_tailcall_body_transform or less likely input_pat_idents/input_idents
         let block = parse_quote! {
             {
                 #runner(
                     #[inline(always)] |(#(#input_pat_idents),*)| {
-                        tailcall::trampoline::Finish(#block)
+                        #wrap_ok(tailcall::trampoline::Finish(#block))
                     },
                     (#(#input_idents),*),
                 )
@@ -63,21 +66,27 @@ impl Fold for FnTailcallTransformer {
     }
 }
 
-pub fn apply_fn_tailcall_body_transform(fn_name_ident: &Ident, block: Block) -> Block {
-    FnTailCallBodyTransformer::new(fn_name_ident).fold_block(block)
+pub fn apply_fn_tailcall_body_transform(fn_name_ident: &Ident, block: Block, ret_type: &TailRetType) -> Block {
+    FnTailCallBodyTransformer::new(fn_name_ident, ret_type).fold_block(block)
 }
 
 struct FnTailCallBodyTransformer<'a> {
     fn_name_ident: &'a Ident,
+    ret_type: &'a TailRetType,
 }
 
 impl<'a> FnTailCallBodyTransformer<'a> {
-    pub fn new(fn_name_ident: &'a Ident) -> Self {
-        Self { fn_name_ident }
+    pub fn new(fn_name_ident: &'a Ident, ret_type: &'a TailRetType) -> Self {
+        Self {fn_name_ident, ret_type: ret_type}
     }
 
     // `fn(X)` => `return Recurse(X)`
     fn try_rewrite_call_expr(&mut self, expr: &Expr) -> Option<Expr> {
+        let wrap_ok = match &self.ret_type {
+            TailRetType::Default => quote!(),
+            TailRetType::Result => quote!(Ok),
+        };
+
         if let Expr::Call(ExprCall { func, args, .. }) = expr {
             if let Expr::Path(ExprPath { ref path, .. }) = **func {
                 if let Some(ident) = path.get_ident() {
@@ -85,7 +94,7 @@ impl<'a> FnTailCallBodyTransformer<'a> {
                         let args = self.fold_expr_tuple(parse_quote! { (#args) });
 
                         return Some(parse_quote! {
-                            return tailcall::trampoline::Recurse(#args)
+                            return #wrap_ok(tailcall::trampoline::Recurse(#args))
                         });
                     }
                 }
@@ -99,6 +108,12 @@ impl<'a> FnTailCallBodyTransformer<'a> {
     // `return X`       =>  `return Finish(X)`
     fn try_rewrite_return_expr(&mut self, expr: &Expr) -> Option<Expr> {
         if let Expr::Return(ExprReturn { expr, .. }) = expr {
+
+            let wrap_ok = match &self.ret_type {
+                TailRetType::Default => quote!(),
+                TailRetType::Result => quote!(Ok),
+            };
+
             // TODO: Store in const
             let empty_tuple = parse_quote! { () };
 
@@ -112,7 +127,7 @@ impl<'a> FnTailCallBodyTransformer<'a> {
                 let expr = self.fold_expr(*expr.clone());
 
                 Some(parse_quote! {
-                    return tailcall::trampoline::Finish(#expr)
+                    return #wrap_ok(tailcall::trampoline::Finish(#expr))
                 })
             });
         }

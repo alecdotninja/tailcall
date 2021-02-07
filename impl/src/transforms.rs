@@ -14,12 +14,12 @@ pub fn apply_fn_tailcall_transform(item_fn: ItemFn, ret_type: TailRetType) -> It
 }
 
 struct FnTailcallTransformer {
-    ret_type: TailRetType
+    ret_type: TailRetType,
 }
 
 impl FnTailcallTransformer {
     pub fn new(ret_type: TailRetType) -> Self {
-        Self {ret_type}
+        Self { ret_type }
     }
 }
 
@@ -29,7 +29,6 @@ fn wrap_ok(ret_type: &TailRetType) -> TokenStream {
         TailRetType::Result => quote!(Ok),
     }
 }
-
 
 impl Fold for FnTailcallTransformer {
     fn fold_item_fn(&mut self, item_fn: ItemFn) -> ItemFn {
@@ -70,7 +69,11 @@ impl Fold for FnTailcallTransformer {
     }
 }
 
-pub fn apply_fn_tailcall_body_transform(fn_name_ident: &Ident, block: Block, ret_type: &TailRetType) -> Block {
+pub fn apply_fn_tailcall_body_transform(
+    fn_name_ident: &Ident,
+    block: Block,
+    ret_type: &TailRetType,
+) -> Block {
     FnTailCallBodyTransformer::new(fn_name_ident, ret_type).fold_block(block)
 }
 
@@ -81,7 +84,10 @@ struct FnTailCallBodyTransformer<'a> {
 
 impl<'a> FnTailCallBodyTransformer<'a> {
     pub fn new(fn_name_ident: &'a Ident, ret_type: &'a TailRetType) -> Self {
-        Self {fn_name_ident, ret_type}
+        Self {
+            fn_name_ident,
+            ret_type,
+        }
     }
 
     // `fn(X)` => `return Recurse(X)`

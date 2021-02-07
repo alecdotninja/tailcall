@@ -22,6 +22,8 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, ItemFn};
 
+use transforms::TailRetType;
+
 /// Transforms a [function definition] so that all recursive calls within the body are
 /// guaranteed to use a single stack frame (via [tail recursion]).
 ///
@@ -93,7 +95,17 @@ use syn::{parse_macro_input, ItemFn};
 #[proc_macro_attribute]
 pub fn tailcall(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
     let input = parse_macro_input!(tokens as ItemFn);
-    let output = transforms::apply_fn_tailcall_transform(input);
+    let output = transforms::apply_fn_tailcall_transform(input, TailRetType::Default);
+
+    TokenStream::from(quote! {
+        #output
+    })
+}
+
+#[proc_macro_attribute]
+pub fn tailcall_res(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(tokens as ItemFn);
+    let output = transforms::apply_fn_tailcall_transform(input, TailRetType::Result);
 
     TokenStream::from(quote! {
         #output

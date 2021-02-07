@@ -70,11 +70,12 @@ where
     }
 }
 
-/// Runs a step function aginast a particular input until it resolves to an output.
+/// Runs a step function aginast a particular input until it resolves to an output
+/// of type `Result<Output, Err>`.
 #[inline(always)]
 pub fn run_res<StepFn, Input, Output, Err>(step: StepFn, mut input: Input) -> Result<Output, Err>
 where
-    StepFn: Fn(Input) -> Result<Next<Input, Output>, Err>,
+    StepFn: Fn(Input) -> Result<Next<Input, Result<Output, Err>>, Err>
 {
     loop {
         match step(input) {
@@ -83,7 +84,7 @@ where
                 continue;
             }
             Ok(Finish(output)) => {
-                break Ok(output);
+                break output;
             }
             Err(err) => {
                 break Err(err);

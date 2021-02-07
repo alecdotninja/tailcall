@@ -1,17 +1,25 @@
 use proc_macro2::Ident;
+use quote::quote;
 use syn::{fold::Fold, *};
 
 use super::helpers::*;
 
-pub fn apply_fn_tailcall_transform(item_fn: ItemFn) -> ItemFn {
-    FnTailcallTransformer::new().fold_item_fn(item_fn)
+pub enum TailRetType {
+    Default,
+    Result,
 }
 
-struct FnTailcallTransformer;
+pub fn apply_fn_tailcall_transform(item_fn: ItemFn, ret_type: TailRetType) -> ItemFn {
+    FnTailcallTransformer::new(ret_type).fold_item_fn(item_fn)
+}
+
+struct FnTailcallTransformer {
+    ret_type: TailRetType
+}
 
 impl FnTailcallTransformer {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(ret_type: TailRetType) -> Self {
+        Self {ret_type: ret_type}
     }
 }
 
@@ -28,9 +36,16 @@ impl Fold for FnTailcallTransformer {
         let input_idents = sig.input_idents();
         let block = apply_fn_tailcall_body_transform(&sig.ident, *block);
 
+        let runner = match &self.ret_type {
+            TailRetType::Default => quote!(tailcall::trampoline::run),
+            TailRetType::Result => quote!(tailcall::trampoline::run_res),
+        };
+ 
+        // TODO: for run_res, need to somehow change return type of closure to be Result
+        // TODO: either in apply_fn_tailcall_body_transform or less likely input_pat_idents/input_idents
         let block = parse_quote! {
             {
-                tailcall::trampoline::run(
+                #runner(
                     #[inline(always)] |(#(#input_pat_idents),*)| {
                         tailcall::trampoline::Finish(#block)
                     },

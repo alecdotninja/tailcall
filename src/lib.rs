@@ -56,4 +56,6 @@
 
 pub use tailcall_impl::tailcall;
 
+pub use tailcall_impl::tailcall_res;
+
 pub mod trampoline;

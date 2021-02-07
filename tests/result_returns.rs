@@ -3,7 +3,7 @@ use tailcall::*;
 
 /// Factorial artificial wrapped in a Result
 fn factorial(input: u64) -> Result<u64, Error> {
-    #[tailcall]
+    #[tailcall_res]
     fn factorial_inner(
         accumulator: Result<u64, Error>,
         input: Result<u64, Error>,

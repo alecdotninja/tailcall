@@ -102,6 +102,9 @@ pub fn tailcall(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
     })
 }
 
+/// Just like using `tailcall`, but if a function returning a `Result` is
+/// annotated as `#[tailcall_res]`, the `?` operator may be used in the
+/// function body.
 #[proc_macro_attribute]
 pub fn tailcall_res(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
     let input = parse_macro_input!(tokens as ItemFn);

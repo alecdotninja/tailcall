@@ -19,7 +19,7 @@ struct FnTailcallTransformer {
 
 impl FnTailcallTransformer {
     pub fn new(ret_type: TailRetType) -> Self {
-        Self {ret_type: ret_type}
+        Self {ret_type}
     }
 }
 
@@ -81,7 +81,7 @@ struct FnTailCallBodyTransformer<'a> {
 
 impl<'a> FnTailCallBodyTransformer<'a> {
     pub fn new(fn_name_ident: &'a Ident, ret_type: &'a TailRetType) -> Self {
-        Self {fn_name_ident, ret_type: ret_type}
+        Self {fn_name_ident, ret_type}
     }
 
     // `fn(X)` => `return Recurse(X)`

@@ -75,7 +75,7 @@ where
 #[inline(always)]
 pub fn run_res<StepFn, Input, Output, Err>(step: StepFn, mut input: Input) -> Result<Output, Err>
 where
-    StepFn: Fn(Input) -> Result<Next<Input, Result<Output, Err>>, Err>
+    StepFn: Fn(Input) -> Result<Next<Input, Result<Output, Err>>, Err>,
 {
     loop {
         match step(input) {

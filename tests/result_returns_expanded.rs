@@ -10,15 +10,15 @@ fn factorial_ex(input: u64) -> Result<u64, Error> {
         tailcall::trampoline::run_res(
             #[inline(always)]
             |(accumulator, input)| {
-                tailcall::trampoline::Finish({
+                Ok(tailcall::trampoline::Finish({
                     let inp = input?;
                     let acc = accumulator?;
                     if inp > 0 {
-                        return tailcall::trampoline::Recurse((Ok(acc * inp), Ok(inp - 1)));
+                        return Ok(tailcall::trampoline::Recurse((Ok(acc * inp), Ok(inp - 1))));
                     } else {
                         Ok(acc)
                     }
-                })
+                }))
             },
             (accumulator, input),
         )

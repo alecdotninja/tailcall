@@ -39,10 +39,10 @@ fn gcd(a: u64, b: u64) -> u64 {
 ### Special Return Types
 
 Rust allows special syntax (the `?` operator) for function bodies that
-return a `Result` type. This has implications for the implementation
-of the macro, so a different annotation is needed for recursive
-functions returning a `Result` (at least if they make use of the `?`
-operator): `#[tailcall_res]`.
+return an `Option` or `Result` type. This has implications for the
+implementation of the macro, so a different annotation is needed for
+recursive functions returning one of these types (at least if they
+make use of the `?` operator): `#[tailcall_res]`.
 
 
 For more detailed information (including some limitations), please see [the docs](https://docs.rs/crates/tailcall).

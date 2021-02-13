@@ -114,3 +114,13 @@ pub fn tailcall_res(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
         #output
     })
 }
+
+#[proc_macro_attribute]
+pub fn tailcall_opt(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(tokens as ItemFn);
+    let output = transforms::apply_fn_tailcall_transform(input, TailRetType::Option);
+
+    TokenStream::from(quote! {
+        #output
+    })
+}

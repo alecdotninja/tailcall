@@ -71,6 +71,29 @@ where
 }
 
 /// Runs a step function aginast a particular input until it resolves to an output
+/// of type `Option<Output>`.
+#[inline(always)]
+pub fn run_opt<StepFn, Input, Output>(step: StepFn, mut input: Input) -> Option<Output>
+where
+    StepFn: Fn(Input) -> Option<Next<Input, Option<Output>>>,
+{
+    loop {
+        match step(input) {
+            Some(Recurse(new_input)) => {
+                input = new_input;
+                continue;
+            }
+            Some(Finish(output)) => {
+                break output;
+            }
+            None => {
+                break None;
+            }
+        }
+    }
+}
+
+/// Runs a step function aginast a particular input until it resolves to an output
 /// of type `Result<Output, Err>`.
 #[inline(always)]
 pub fn run_res<StepFn, Input, Output, Err>(step: StepFn, mut input: Input) -> Result<Output, Err>

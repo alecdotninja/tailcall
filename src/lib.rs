@@ -55,7 +55,7 @@
 //! [`tailcall`]: attr.tailcall.html
 
 pub use tailcall_impl::tailcall;
-
+pub use tailcall_impl::tailcall_opt;
 pub use tailcall_impl::tailcall_res;
 
 pub mod trampoline;

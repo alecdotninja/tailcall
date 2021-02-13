@@ -6,6 +6,7 @@ use super::helpers::*;
 
 pub enum TailRetType {
     Default,
+    Option,
     Result,
 }
 
@@ -26,6 +27,7 @@ impl FnTailcallTransformer {
 fn wrap_ok(ret_type: &TailRetType) -> TokenStream {
     match ret_type {
         TailRetType::Default => quote!(),
+        TailRetType::Option => quote!(Some),
         TailRetType::Result => quote!(Ok),
     }
 }
@@ -45,6 +47,7 @@ impl Fold for FnTailcallTransformer {
 
         let runner = match &self.ret_type {
             TailRetType::Default => quote!(tailcall::trampoline::run),
+            TailRetType::Option => quote!(tailcall::trampoline::run_opt),
             TailRetType::Result => quote!(tailcall::trampoline::run_res),
         };
         let ok = wrap_ok(&self.ret_type);

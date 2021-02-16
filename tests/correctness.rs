@@ -14,6 +14,17 @@ fn factorial(input: u64) -> u64 {
     factorial_inner(1, input)
 }
 
+#[tailcall]
+fn add_iter<'a, I>(mut int_iter: I, accum: i32) -> i32
+where
+    I: Iterator<Item = &'a i32>,
+{
+    match int_iter.next() {
+        Some(i) => add_iter(int_iter, accum + i),
+        None => accum,
+    }
+}
+
 #[test]
 fn test_factorial_correctness() {
     assert_eq!(factorial(0), 1);

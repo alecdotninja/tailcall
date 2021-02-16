@@ -14,7 +14,10 @@ fn factorial(input: u64) -> u64 {
     factorial_inner(1, input)
 }
 
-#[tailcall]
+// FIXME: when the #[tailcall] is present, this generates a warning about
+//        mut being unnecessary, even though it is.
+//        See https://github.com/alecdotninja/tailcall/issues/7
+// #[tailcall]
 fn add_iter<'a, I>(mut int_iter: I, accum: i32) -> i32
 where
     I: Iterator<Item = &'a i32>,
@@ -24,6 +27,25 @@ where
         None => accum,
     }
 }
+
+fn add_iter_exp<'a, I>(int_iter: I, accum: i32) -> i32
+where
+    I: Iterator<Item = &'a i32>,
+{
+    tailcall::trampoline::run(
+        #[inline(always)]
+        |(mut int_iter, accum)| {
+            (tailcall::trampoline::Finish({
+                match int_iter.next() {
+                    Some(i) => return (tailcall::trampoline::Recurse((int_iter, accum + i))),
+                    None => accum,
+                }
+            }))
+        },
+        (int_iter, accum),
+    )
+}
+
 
 #[test]
 fn test_factorial_correctness() {

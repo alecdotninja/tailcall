@@ -20,6 +20,17 @@ fn factorial(input: u64) -> Result<u64, Error> {
     factorial_inner(Ok(1), Ok(input))
 }
 
+// #[tailcall_res]
+fn add_iter<'a, I>(mut int_iter: I, accum: i32) -> Result<i32, ()>
+where
+    I: Iterator<Item = &'a i32>,
+{
+    match int_iter.next() {
+        Some(i) => add_iter(int_iter, accum + i),
+        None => Ok(accum),
+    }
+}
+
 #[test]
 fn factorial_result_runs() {
     assert_eq!(factorial(0).unwrap(), 1);

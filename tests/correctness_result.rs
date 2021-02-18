@@ -21,6 +21,7 @@ fn factorial(input: u64) -> Result<u64, Error> {
 }
 
 // #[tailcall_res]
+#[allow(dead_code)]
 fn add_iter<'a, I>(mut int_iter: I, accum: i32) -> Result<i32, ()>
 where
     I: Iterator<Item = &'a i32>,

@@ -17,7 +17,9 @@ fn factorial(input: u64) -> u64 {
 // FIXME: when the #[tailcall] is present, this generates a warning about
 //        mut being unnecessary, even though it is.
 //        See https://github.com/alecdotninja/tailcall/issues/7
-#[tailcall]
+
+//#[tailcall]
+#[allow(dead_code)]
 fn add_iter<'a, I>(mut int_iter: I, accum: i32) -> i32
 where
     I: Iterator<Item = &'a i32>,

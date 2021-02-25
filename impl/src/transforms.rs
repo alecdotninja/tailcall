@@ -41,14 +41,8 @@ impl Fold for FnTailcallTransformer {
             block,
         } = item_fn;
 
-        let input_idents_outer = sig.input_pat_idents_outer();
-        let fn_args_outer = input_idents_outer.map(
-        let sig_new = Signature{ inputs: fn_args_outer, ..sig };
         let input_pat_idents = sig.input_pat_idents();
-
-        let input_idents = sig.input_idents(FnArg::Typed(PatType(
-        // TODO: need to zip sig.input_idents with sig.inputs to fill in other data
-        )));
+        let input_idents = sig.input_idents();
         let block = apply_fn_tailcall_body_transform(&sig.ident, *block, &self.ret_type);
 
         let runner = match &self.ret_type {
@@ -72,7 +66,7 @@ impl Fold for FnTailcallTransformer {
         ItemFn {
             attrs,
             vis,
-            sig: sig_new,
+            sig,
             block,
         }
     }

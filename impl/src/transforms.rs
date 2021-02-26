@@ -42,7 +42,7 @@ impl Fold for FnTailcallTransformer {
         } = item_fn;
 
         let fn_args_new = sig.input_pat_idents_outer();
-        let sig_new = Signature{
+        let sig_new = Signature {
             abi: sig.abi.clone(),
             ident: sig.ident.clone(),
             generics: sig.generics.clone(),

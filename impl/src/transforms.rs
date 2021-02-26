@@ -41,6 +41,17 @@ impl Fold for FnTailcallTransformer {
             block,
         } = item_fn;
 
+        let fn_args_new = sig.input_pat_idents_outer();
+        let sig_new = Signature{
+            abi: sig.abi.clone(),
+            ident: sig.ident.clone(),
+            generics: sig.generics.clone(),
+            inputs: fn_args_new,
+            variadic: sig.variadic.clone(),
+            output: sig.output.clone(),
+            ..sig
+        };
+
         let input_pat_idents = sig.input_pat_idents();
         let input_idents = sig.input_idents();
         let block = apply_fn_tailcall_body_transform(&sig.ident, *block, &self.ret_type);
@@ -66,7 +77,7 @@ impl Fold for FnTailcallTransformer {
         ItemFn {
             attrs,
             vis,
-            sig,
+            sig: sig_new,
             block,
         }
     }

@@ -13,13 +13,6 @@ pub trait SignatureExt {
             .map(|PatIdent { ident, .. }| ident.clone())
             .collect()
     }
-
-    // fn input_idents_outer(&self) -> Vec<Ident> {
-    //     self.input_pat_idents_outer()
-    //         .iter()
-    //         .map(|PatIdent { ident, .. }| ident.clone())
-    //         .collect()
-    // }
 }
 
 impl SignatureExt for Signature {

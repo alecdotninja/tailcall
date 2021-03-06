@@ -36,7 +36,7 @@ fn gcd(a: u64, b: u64) -> u64 {
 }
 ```
 
-For more detailed information (including some limitations), please see [the docs](https://docs.rs/crates/tailcall).
+For more detailed information (including some limitations), please see [the docs](https://docs.rs/tailcall).
 
 ## Implementation
 

@@ -30,12 +30,15 @@ impl Fold for FnTailcallTransformer {
 
         let block = parse_quote! {
             {
-                tailcall::trampoline::run(
-                    #[inline(always)] |(#(#input_pat_idents),*)| {
-                        tailcall::trampoline::Finish(#block)
-                    },
-                    (#(#input_idents),*),
-                )
+                let mut tailcall_trampoline_state =
+                    (#(#input_idents),*);
+
+                'tailcall_trampoline_loop: loop {
+                    let (#(#input_pat_idents),*) =
+                        tailcall_trampoline_state;
+
+                    return #block;
+                }
             }
         };
 
@@ -61,7 +64,6 @@ impl<'a> FnTailCallBodyTransformer<'a> {
         Self { fn_name_ident }
     }
 
-    // `fn(X)` => `return Recurse(X)`
     fn try_rewrite_call_expr(&mut self, expr: &Expr) -> Option<Expr> {
         if let Expr::Call(ExprCall { func, args, .. }) = expr {
             if let Expr::Path(ExprPath { ref path, .. }) = **func {
@@ -70,7 +72,10 @@ impl<'a> FnTailCallBodyTransformer<'a> {
                         let args = self.fold_expr_tuple(parse_quote! { (#args) });
 
                         return Some(parse_quote! {
-                            return tailcall::trampoline::Recurse(#args)
+                            {
+                                tailcall_trampoline_state = #args;
+                                continue 'tailcall_trampoline_loop;
+                            }
                         });
                     }
                 }
@@ -80,26 +85,12 @@ impl<'a> FnTailCallBodyTransformer<'a> {
         None
     }
 
-    // `return fn(X)`   =>  `return Recurse(X)`
-    // `return X`       =>  `return Finish(X)`
     fn try_rewrite_return_expr(&mut self, expr: &Expr) -> Option<Expr> {
-        if let Expr::Return(ExprReturn { expr, .. }) = expr {
-            // TODO: Store in const
-            let empty_tuple = parse_quote! { () };
-
-            let expr = if let Some(expr) = expr {
-                expr
-            } else {
-                &empty_tuple
-            };
-
-            return self.try_rewrite_expr(expr).or_else(|| {
-                let expr = self.fold_expr(*expr.clone());
-
-                Some(parse_quote! {
-                    return tailcall::trampoline::Finish(#expr)
-                })
-            });
+        if let Expr::Return(ExprReturn {
+            expr: Some(expr), ..
+        }) = expr
+        {
+            return self.try_rewrite_expr(expr);
         }
 
         None

@@ -38,6 +38,18 @@ fn memoized_factorial(input: u64, memo: &mut HashMap<u64, u64>) -> u64 {
     factorial_inner(1, input, memo)
 }
 
+#[tailcall]
+#[allow(dead_code)]
+fn add_iter<'a, I>(mut int_iter: I, accum: i32) -> i32
+where
+    I: Iterator<Item = &'a i32>,
+{
+    match int_iter.next() {
+        Some(i) => add_iter(int_iter, accum + i),
+        None => accum,
+    }
+}
+
 #[test]
 fn test_memoized_factorial_correctness() {
     let mut memo = HashMap::new();

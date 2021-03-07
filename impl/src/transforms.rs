@@ -1,7 +1,7 @@
 use proc_macro2::Ident;
 use syn::{fold::Fold, *};
 
-use super::helpers::*;
+use super::helpers::{Binding, RewriteForBindLater};
 
 pub fn apply_fn_tailcall_transform(item_fn: ItemFn) -> ItemFn {
     FnTailcallTransformer::new().fold_item_fn(item_fn)
@@ -20,23 +20,22 @@ impl Fold for FnTailcallTransformer {
         let ItemFn {
             attrs,
             vis,
-            sig,
+            mut sig,
             block,
         } = item_fn;
 
-        let input_pat_idents = sig.input_pat_idents();
-        let input_idents = sig.input_idents();
+        let binding = sig.bind_later();
+        let binding_pat = binding.tuple_pat();
+        let binding_expr = binding.tuple_expr();
+
         let block = apply_fn_tailcall_body_transform(&sig.ident, *block);
 
         let block = parse_quote! {
             {
-                let mut tailcall_trampoline_state =
-                    (#(#input_idents),*);
+                let mut tailcall_trampoline_state = #binding_expr;
 
                 'tailcall_trampoline_loop: loop {
-                    let (#(#input_pat_idents),*) =
-                        tailcall_trampoline_state;
-
+                    let #binding_pat = tailcall_trampoline_state;
                     return #block;
                 }
             }

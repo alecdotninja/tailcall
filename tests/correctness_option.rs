@@ -16,6 +16,18 @@ fn factorial(input: u64) -> Option<u64> {
     factorial_inner(Some(1), Some(input))
 }
 
+#[tailcall]
+#[allow(dead_code)]
+fn add_iter<'a, I>(mut int_iter: I, accum: i32) -> Option<i32>
+where
+    I: Iterator<Item = &'a i32>,
+{
+    match int_iter.next() {
+        Some(i) => add_iter(int_iter, accum + i),
+        None => Some(accum),
+    }
+}
+
 #[test]
 fn factorial_option_runs() {
     assert_eq!(factorial(0).unwrap(), 1);

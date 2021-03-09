@@ -16,7 +16,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-tailcall = "0.2"
+tailcall = "0.1.5"
 ```
 
 ## Usage

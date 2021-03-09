@@ -7,17 +7,14 @@ pub trait RewriteForBindLater {
 impl RewriteForBindLater for Pat {
     fn bind_later(&mut self) -> Vec<(Pat, Expr)> {
         match self {
-            Pat::Ident(PatIdent { ident, mutability, .. }) => {
+            Pat::Ident(PatIdent { attrs, subpat: None, mutability, ident, .. }) if attrs.is_empty() => {
                 vec![
                     (
                         Pat::Ident(PatIdent {
-                            // leave attrs, subpat, and by_ref in the original binding
                             attrs: vec![],
                             subpat: None,
                             by_ref: None,
-                            // take mutability to the new binding
                             mutability: mutability.take(),
-                            // use the same ident
                             ident: ident.clone(),
                         }),
                         parse_quote! { #ident },

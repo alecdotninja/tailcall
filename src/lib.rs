@@ -1,3 +1,4 @@
+#![no_std]
 #![deny(
     missing_docs,
     missing_debug_implementations,

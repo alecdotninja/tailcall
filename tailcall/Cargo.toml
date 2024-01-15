@@ -12,7 +12,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-tailcall-impl = { path = "../tailcall-impl" }
+tailcall-impl = { workspace = true }
 
 [dev-dependencies]
 backtrace = "~0.3"

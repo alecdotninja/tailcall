@@ -14,5 +14,13 @@ keywords = ["recursion", "tail", "tailcall", "become"]
 categories = ["algorithms", "no-std"]
 license = "MIT OR Apache-2.0"
 authors = ["Alec Larsen <hello@alec.ninja>"]
-version = "1.0.0"
 edition = "2018"
+
+# ⚠️ Warning! When updating the version here, you must also update the version
+# in the `workspace.dependencies` section of this file for the `tailcall` and
+# `tailcall-impl` crates.
+version = "1.0.0"
+
+[workspace.dependencies]
+tailcall = { path = "tailcall", version = "1.0.0" }
+tailcall-impl = { path = "tailcall-impl", version = "1.0.0" }

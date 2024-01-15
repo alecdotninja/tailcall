@@ -1,27 +1,18 @@
-[package]
-name = "tailcall"
+[workspace]
+
+members = [
+    "tailcall",
+    "tailcall-impl",
+]
+
+[workspace.package]
 description = "Safe, zero-cost tail recursion"
 documentation = "https://docs.rs/tailcall"
 repository = "https://github.com/alecdotninja/tailcall"
 readme = "README.md"
 keywords = ["recursion", "tail", "tailcall", "become"]
 categories = ["algorithms", "no-std"]
-exclude = ["/.github", ".gitignore"]
 license = "MIT OR Apache-2.0"
 authors = ["Alec Larsen <hello@alec.ninja>"]
 version = "1.0.0"
 edition = "2018"
-
-[badges]
-travis-ci = { repository = "alecdotninja/tailcall" }
-
-[dependencies]
-tailcall-impl = { path = "impl", version = "1.0.0" }
-
-[dev-dependencies]
-backtrace = "0.3.40"
-bencher = "0.1.5"
-
-[[bench]]
-name = "bench"
-harness = false

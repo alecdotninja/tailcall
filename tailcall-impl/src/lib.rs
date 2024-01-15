@@ -31,7 +31,7 @@ use syn::{parse_macro_input, ItemFn};
 /// # Example
 ///
 /// ```
-/// use tailcall::tailcall;
+/// use tailcall_impl::tailcall;
 ///
 /// fn factorial(input: u64) -> u64 {
 ///     #[tailcall]
@@ -52,7 +52,7 @@ use syn::{parse_macro_input, ItemFn};
 /// - All recursive calls must be in [tail form]:
 ///
 /// ```compile_fail
-/// use tailcall::tailcall;
+/// use tailcall_impl::tailcall;
 ///   
 /// #[tailcall]
 /// fn factorial(input: u64) -> u64 {

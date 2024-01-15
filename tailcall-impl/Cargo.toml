@@ -1,0 +1,20 @@
+[package]
+name = "tailcall-impl"
+description = "The procedural macro implementation for the tailcall crate"
+documentation.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+license.workspace = true
+authors.workspace = true
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+proc-macro2 = "~1"
+quote = "~1"
+syn = { version = "~1", features = ["full", "fold"] }
+
+[lib]
+proc-macro = true

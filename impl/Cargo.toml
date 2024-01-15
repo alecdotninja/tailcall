@@ -7,7 +7,7 @@ keywords = ["recursion", "tail", "tailcall", "become"]
 categories = ["algorithms", "no-std"]
 license = "MIT OR Apache-2.0"
 authors = ["Alec Larsen <hello@alec.ninja>"]
-version = "0.1.6"
+version = "1.0.0"
 edition = "2018"
 
 [badges]

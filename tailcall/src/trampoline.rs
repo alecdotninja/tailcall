@@ -1,71 +1,34 @@
-//! This module provides a simple, zero-cost [trampoline]. It is designed to be used by the
-//! [`tailcall`] macro, but it can also be used manually.
-//!
-//! # Usage
-//!
-//! Express the contents of a recusive function as a step function (`Fn(Input) -> Next<Input, Output>`).
-//! To guarantee that only a single stack frame will be used at all levels of optimization, annotate it
-//! with `#[inline(always)]` attribute. This step function and an initial input can then be passed to
-//! [`run`] which will recusively call it until it resolves to an output.
-//!
-//! ```
-//! // fn gcd(a: u64, b: u64) -> u64 {
-//! //     if b == 0 {
-//! //         a
-//! //     } else {
-//! //         gcd(b, a % b)
-//! //     }
-//! // }
-//!
-//! #[inline(always)]
-//! fn gcd_step((a, b): (u64, u64)) -> tailcall::trampoline::Next<(u64, u64), u64> {
-//!     if b == 0 {
-//!         tailcall::trampoline::Finish(a)
-//!     } else {
-//!         tailcall::trampoline::Recurse((b, a % b))
-//!     }
-//! }
-//!
-//! fn gcd(a: u64, b: u64) -> u64 {
-//!
-//!     tailcall::trampoline::run(gcd_step, (a, b))
-//! }
-//! ```
-//!
-//! [trampoline]: https://en.wikipedia.org/wiki/Tail_call#Through_trampolining
-//! [`tailcall`]: ../tailcall_impl/attr.tailcall.html
-//! [`run`]: fn.run.html
-//!
+use crate::slot::Slot;
+use crate::thunk::Thunk;
 
-/// This is the output of the step function. It indicates to [run] what should happen next.
-///
-/// [run]: fn.run.html
-#[derive(Debug)]
-pub enum Next<Input, Output> {
-    /// This variant indicates that the step function should be run again with the provided input.
-    Recurse(Input),
-
-    /// This variant indicates that there are no more steps to be taken and the provided output should be returned.
-    Finish(Output),
+pub enum Action<'slot, T> {
+    Done(T),
+    Call(Thunk<'slot, Self>),
 }
 
-pub use Next::*;
-
-/// Runs a step function aginast a particular input until it resolves to an output.
 #[inline(always)]
-pub fn run<StepFn, Input, Output>(step: StepFn, mut input: Input) -> Output
+pub fn done<T>(_slot: &mut Slot, value: T) -> Action<T> {
+    Action::Done(value)
+}
+
+#[inline(always)]
+pub fn call<'slot, T, F>(slot: &'slot mut Slot, fn_once: F) -> Action<'slot, T>
 where
-    StepFn: Fn(Input) -> Next<Input, Output>,
+    F: FnOnce(&'slot mut Slot) -> Action<'slot, T> + 'slot,
 {
+    Action::Call(Thunk::new_in(slot, fn_once))
+}
+
+#[inline(always)]
+pub fn run<T>(build_action: impl FnOnce(&mut Slot) -> Action<T>) -> T {
+    let slot = &mut Slot::new();
+
+    let mut action = build_action(slot);
+
     loop {
-        match step(input) {
-            Recurse(new_input) => {
-                input = new_input;
-                continue;
-            }
-            Finish(output) => {
-                break output;
-            }
+        match action {
+            Action::Done(value) => return value,
+            Action::Call(thunk) => action = thunk.call(),
         }
     }
 }

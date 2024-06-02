@@ -1,7 +1,7 @@
-use crate::slot::Slot;
+use crate::slot::{Slot, SlotBox};
 
 pub struct Thunk<'slot, T> {
-    ptr: &'slot mut dyn ThunkFn<'slot, T>,
+    thunk_fn: SlotBox<'slot, dyn ThunkFn<'slot, T>>,
 }
 
 impl<'slot, T> Thunk<'slot, T> {
@@ -10,28 +10,23 @@ impl<'slot, T> Thunk<'slot, T> {
     where
         F: FnOnce(&'slot mut Slot) -> T + 'slot,
     {
+        let fn_once = SlotBox::new_in(slot, fn_once);
+
         Self {
-            ptr: slot.cast().write(fn_once),
+            // Convert the thin pointer to `F` into a fat pointer to a
+            // `dyn ThunkFn`. This is required since stable Rust does not yet
+            // support "unsized coercions" on user-defined pointer types.
+            thunk_fn: SlotBox::coerce(fn_once, |p| p as _),
         }
     }
 
     #[inline(always)]
     pub fn call(self) -> T {
-        let ptr: *mut dyn ThunkFn<'slot, T> = self.ptr;
-        core::mem::forget(self);
+        let thunk_fn = SlotBox::leak(self.thunk_fn);
 
-        // SAFETY: The only way to create a `Thunk` is through `Thunk::new_in`
-        // which stores the value in a `Slot`. Additionally, we just forgot
-        // `self`, so we know that it is impossible to call this method again.
-        unsafe { (*ptr).call_once_in_slot() }
-    }
-}
-
-impl<T> Drop for Thunk<'_, T> {
-    fn drop(&mut self) {
-        // SAFETY: The owned value was stored in a `Slot` which does not drop,
-        // and this struct has a unique pointer to the value there.
-        unsafe { core::ptr::drop_in_place(self.ptr) }
+        // SAFETY: `thunk_fn` is in a `Slot` and since this function takes
+        // ownership of self, it cannot be called again.
+        unsafe { thunk_fn.call_once_in_slot() }
     }
 }
 
@@ -46,15 +41,9 @@ where
     F: FnOnce(&'slot mut Slot) -> T,
 {
     unsafe fn call_once_in_slot(&'slot mut self) -> T {
-        // SAFETY: Our caller guarantees that `self` is currently in a `Slot`,
-        // and `Slot` guarantees that it is safe to transmute between `&mut F`
-        // and `&mut Slot`.
-        let slot: &'slot mut Slot = unsafe { core::mem::transmute(self) };
-
-        // SAFETY: We know that there is a `F` in the slot because this method
-        // was just called on it. Although the bits remain the same, logically,
-        // `fn_once` has been moved *out* of the slot beyond this point.
-        let fn_once: F = unsafe { slot.cast().assume_init_read() };
+        // SAFETY: Our caller garentees that `self` is stored in a `Slot`.
+        let in_slot = unsafe { SlotBox::adopt(self) };
+        let (slot, fn_once) = SlotBox::unwrap(in_slot);
 
         // Call the underlying function with the now empty slot.
         fn_once(slot)

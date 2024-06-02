@@ -16,6 +16,7 @@ impl<'slot, T> Thunk<'slot, T> {
             // Convert the thin pointer to `F` into a fat pointer to a
             // `dyn ThunkFn`. This is required since stable Rust does not yet
             // support "unsized coercions" on user-defined pointer types.
+            #[allow(trivial_casts)]
             thunk_fn: SlotBox::coerce(fn_once, |p| p as _),
         }
     }

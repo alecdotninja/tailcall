@@ -26,21 +26,21 @@ impl Slot {
 
     #[inline(always)]
     pub fn cast<T>(&mut self) -> &mut MaybeUninit<T> {
-        let slot_ptr = self as *mut _;
+        let slot_ptr: *mut _ = self;
 
         // Verify the size and alignment of T.
         assert!(size_of::<T>() <= size_of::<Self>());
         assert!(align_of::<T>() <= align_of::<Self>());
 
-        // SAFETY: We just checked the size and alignment of T. Since we are
-        // only returning `MaybeUninit<T>`, we need not worry about the bits.
+        // SAFETY: We just checked the size and alignment of `T`. Since we are
+        // only returning `MaybeUninit<T>`, we need not worry about the value.
         let casted = unsafe { &mut *self.bytes.as_mut_ptr().cast() };
-        let casted_ptr = casted as *mut _;
+        let casted_ptr: *mut _ = casted;
 
         // Verify that the address of the pointer has not actually changed. This
-        // ensures that it is safe to transume between `&mut Slot` and `&mut T`
-        // (provided that there is a `T` in the slot).
-        assert!(casted_ptr as usize == slot_ptr as usize);
+        // ensures that it is safe to recover the slot pointer from the value
+        // pointer.
+        assert_eq!(casted_ptr as usize, slot_ptr as usize);
 
         casted
     }
@@ -68,12 +68,15 @@ impl<'slot, T: ?Sized> SlotBox<'slot, T> {
         F: FnOnce(&mut T) -> &mut U,
     {
         let leaked = Self::leak(slot_box);
-        let leaked_ptr = leaked as *mut _ as *mut u8;
+        let leaked_ptr: *mut _ = leaked;
 
         let coerced = coerce_fn(leaked);
-        let coerced_ptr = coerced as *mut _ as *mut u8;
+        let coerced_ptr: *mut _ = coerced;
 
-        assert!(leaked_ptr as usize == coerced_ptr as usize);
+        assert_eq!(
+            leaked_ptr as *mut u8 as usize,
+            coerced_ptr as *mut u8 as usize,
+        );
 
         // SAFETY: Since the addresss of the pointer did not change, we know
         // that the value is still in a slot and only the type has changed.

@@ -72,6 +72,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+          components: miri
       - uses: Swatinem/rust-cache@v2.7.3
       - name: Run tests under Miri
         run: cargo +nightly miri test --all

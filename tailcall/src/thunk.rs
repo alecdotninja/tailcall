@@ -1,95 +1,21 @@
-use core::marker::PhantomData;
+use crate::slot::Slot;
+use core::{marker::PhantomData, mem::transmute, ptr::drop_in_place};
 
-mod slot {
-    use core::mem::{align_of, size_of, ManuallyDrop, MaybeUninit};
+const MAX_THUNK_DATA_SIZE: usize = 48;
 
-    #[repr(C, align(16))]
-    pub struct Slot<const SIZE: usize> {
-        bytes: MaybeUninit<[u8; SIZE]>,
-    }
+type ThunkSlot = Slot<MAX_THUNK_DATA_SIZE>;
+type CallFn<T> = fn(ThunkSlot) -> T;
+type DropInPlaceFn = unsafe fn(*mut ThunkSlot);
 
-    union SlotView<T, const SIZE: usize> {
-        value: ManuallyDrop<T>,
-        slot: ManuallyDrop<Slot<SIZE>>,
-    }
-
-    impl<const SIZE: usize> Slot<SIZE> {
-        pub const fn new<T>(value: T) -> Self {
-            Self::assert_valid_at::<T>();
-
-            SlotView::of_value(value).into_slot()
-        }
-
-        // SAFETY: The caller must ensure that `self` contains a valid `T`.
-        pub const unsafe fn into_inner<T>(self) -> T {
-            Self::assert_valid_at::<T>();
-
-            unsafe { SlotView::of_slot(self).into_value() }
-        }
-
-        const fn assert_valid_at<T>() {
-            assert!(size_of::<T>() <= size_of::<Self>());
-            assert!(align_of::<T>() <= align_of::<Self>());
-        }
-    }
-
-    impl<T, const SIZE: usize> SlotView<T, SIZE> {
-        const fn of_value(value: T) -> Self {
-            Self {
-                value: ManuallyDrop::new(value),
-            }
-        }
-
-        const fn into_slot(self) -> Slot<SIZE> {
-            // SAFETY: `Slot<SIZE>` is valid at all bit patterns.
-            ManuallyDrop::into_inner(unsafe { self.slot })
-        }
-
-        const fn of_slot(slot: Slot<SIZE>) -> Self {
-            Self {
-                slot: ManuallyDrop::new(slot),
-            }
-        }
-
-        // SAFETY: The caller must ensure that `self` contains a valid `T`.
-        const unsafe fn into_value(self) -> T {
-            ManuallyDrop::into_inner(unsafe { self.value })
-        }
-    }
-}
-
-mod guard {
-    use core::mem::forget;
-
-    pub struct Gurad();
-
-    impl Gurad {
-        pub const fn new() -> Self {
-            Self()
-        }
-
-        pub const fn disarm(self) {
-            forget(self)
-        }
-    }
-
-    impl Drop for Gurad {
-        fn drop(&mut self) {
-            unreachable!()
-        }
-    }
-}
-
-use guard::Gurad;
-use slot::Slot;
-
-const SLOT_SIZE: usize = 48;
-
-#[must_use]
+#[repr(transparent)]
 pub struct Thunk<'a, T = ()> {
-    guard: Gurad,
-    slot: Slot<SLOT_SIZE>,
-    call_impl: fn(Slot<SLOT_SIZE>) -> T,
+    inner: ThunkInner<'a, T>,
+}
+
+struct ThunkInner<'a, T> {
+    slot: ThunkSlot,
+    call_fn: CallFn<T>,
+    drop_in_place_fn: DropInPlaceFn,
     _marker: PhantomData<dyn FnOnce() -> T + 'a>,
 }
 
@@ -99,24 +25,57 @@ impl<'a, T> Thunk<'a, T> {
         F: FnOnce() -> T + 'a,
     {
         Self {
-            guard: Gurad::new(),
+            inner: ThunkInner::new(fn_once),
+        }
+    }
+
+    #[inline(always)]
+    pub fn call(self) -> T {
+        self.into_inner().call()
+    }
+
+    const fn into_inner(self) -> ThunkInner<'a, T> {
+        // SAFETY: `Thunk` is a transparent wrapper around `ThunkInner`.
+        unsafe { transmute(self) }
+    }
+}
+
+impl<'a, T> Drop for Thunk<'a, T> {
+    fn drop(&mut self) {
+        // SAFETY: We own `inner`, and it cannot be used after dropping.
+        unsafe { self.inner.drop_in_place() }
+    }
+}
+
+impl<'a, T> ThunkInner<'a, T> {
+    pub const fn new<F>(fn_once: F) -> Self
+    where
+        F: FnOnce() -> T + 'a,
+    {
+        Self {
             slot: Slot::new(fn_once),
-            call_impl: |slot| unsafe { slot.into_inner::<F>()() },
+            call_fn: |slot| {
+                // SAFETY: `slot` is initialized above with `F`.
+                unsafe { slot.into_value::<F>()() }
+            },
+            drop_in_place_fn: |slot_ptr| {
+                // SAFETY: `slot` is initialized above with `F`.
+                unsafe { drop_in_place(slot_ptr.cast::<F>()) };
+            },
             _marker: PhantomData,
         }
     }
 
     #[inline(always)]
     pub fn call(self) -> T {
-        let Self {
-            call_impl,
-            slot,
-            guard,
-            _marker,
-        } = self;
+        let Self { slot, call_fn, .. } = self;
 
-        guard.disarm();
+        call_fn(slot)
+    }
 
-        call_impl(slot)
+    // SAFETY: `Self::call` cannot be called after dropping in place.
+    #[inline(always)]
+    pub unsafe fn drop_in_place(&mut self) {
+        unsafe { (self.drop_in_place_fn)(&mut self.slot) }
     }
 }

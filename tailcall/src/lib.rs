@@ -10,5 +10,6 @@
 
 pub use tailcall_impl::tailcall;
 
+pub(crate) mod slot;
 pub mod thunk;
 pub mod trampoline;

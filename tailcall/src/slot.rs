@@ -1,7 +1,7 @@
 use core::mem::{align_of, size_of, ManuallyDrop, MaybeUninit};
 
 #[repr(C, align(16))]
-pub struct Slot<const SIZE: usize> {
+pub(crate) struct Slot<const SIZE: usize> {
     bytes: MaybeUninit<[u8; SIZE]>,
 }
 
@@ -12,13 +12,7 @@ union SlotView<T, const SIZE: usize> {
 }
 
 impl<const SIZE: usize> Slot<SIZE> {
-    pub const fn uninit() -> Self {
-        Self {
-            bytes: MaybeUninit::uninit(),
-        }
-    }
-
-    pub const fn new<T>(value: T) -> Self {
+    pub(crate) const fn new<T>(value: T) -> Self {
         assert!(
             align_of::<T>() <= align_of::<Self>(),
             "unsupport value alignment",
@@ -33,14 +27,8 @@ impl<const SIZE: usize> Slot<SIZE> {
     }
 
     // SAFETY: The caller must ensure that `self` contains a valid `T`.
-    pub const unsafe fn into_value<T>(self) -> T {
+    pub(crate) const unsafe fn into_value<T>(self) -> T {
         unsafe { SlotView::of_slot(self).into_value() }
-    }
-}
-
-impl<const SIZE: usize> Default for Slot<SIZE> {
-    fn default() -> Self {
-        Self::uninit()
     }
 }
 

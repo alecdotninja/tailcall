@@ -1,5 +1,6 @@
+use core::{any::type_name, fmt, marker::PhantomData, mem::transmute, ptr::drop_in_place};
+
 use crate::slot::Slot;
-use core::{marker::PhantomData, mem::transmute, ptr::drop_in_place};
 
 const MAX_THUNK_DATA_SIZE: usize = 48;
 
@@ -9,13 +10,13 @@ type DropInPlaceFn = unsafe fn(*mut ThunkSlot);
 
 #[repr(transparent)]
 pub struct Thunk<'a, T = ()> {
-    inner: ThunkInner<'a, T>,
+    inner: Inner<'a, T>,
 }
 
-struct ThunkInner<'a, T> {
+struct Inner<'a, T> {
     slot: ThunkSlot,
-    call_fn: CallFn<T>,
-    drop_in_place_fn: DropInPlaceFn,
+    call_impl: CallFn<T>,
+    drop_in_place_impl: DropInPlaceFn,
     _marker: PhantomData<dyn FnOnce() -> T + 'a>,
 }
 
@@ -25,57 +26,42 @@ impl<'a, T> Thunk<'a, T> {
         F: FnOnce() -> T + 'a,
     {
         Self {
-            inner: ThunkInner::new(fn_once),
+            inner: Inner {
+                slot: Slot::new(fn_once),
+                call_impl: |slot| {
+                    // SAFETY: `slot` is initialized above with `F`.
+                    unsafe { slot.into_value::<F>()() }
+                },
+                drop_in_place_impl: |slot_ptr| {
+                    // SAFETY: `slot` is initialized above with `F`.
+                    unsafe { drop_in_place(slot_ptr.cast::<F>()) };
+                },
+                _marker: PhantomData,
+            },
         }
     }
 
     #[inline(always)]
     pub fn call(self) -> T {
-        self.into_inner().call()
-    }
+        // SAFETY: `Thunk` is a transparent wrapper around `Inner`. This also
+        // ensures that the `Drop` impl will not run.
+        let Inner {
+            slot, call_impl, ..
+        } = unsafe { transmute(self) };
 
-    const fn into_inner(self) -> ThunkInner<'a, T> {
-        // SAFETY: `Thunk` is a transparent wrapper around `ThunkInner`.
-        unsafe { transmute(self) }
+        call_impl(slot)
     }
 }
 
-impl<'a, T> Drop for Thunk<'a, T> {
+impl<T> Drop for Thunk<'_, T> {
     fn drop(&mut self) {
-        // SAFETY: We own `inner`, and it cannot be used after dropping.
-        unsafe { self.inner.drop_in_place() }
+        // SAFETY: We own the slot, and it cannot be used after dropping.
+        unsafe { (self.inner.drop_in_place_impl)(&mut self.inner.slot) }
     }
 }
 
-impl<'a, T> ThunkInner<'a, T> {
-    pub const fn new<F>(fn_once: F) -> Self
-    where
-        F: FnOnce() -> T + 'a,
-    {
-        Self {
-            slot: Slot::new(fn_once),
-            call_fn: |slot| {
-                // SAFETY: `slot` is initialized above with `F`.
-                unsafe { slot.into_value::<F>()() }
-            },
-            drop_in_place_fn: |slot_ptr| {
-                // SAFETY: `slot` is initialized above with `F`.
-                unsafe { drop_in_place(slot_ptr.cast::<F>()) };
-            },
-            _marker: PhantomData,
-        }
-    }
-
-    #[inline(always)]
-    pub fn call(self) -> T {
-        let Self { slot, call_fn, .. } = self;
-
-        call_fn(slot)
-    }
-
-    // SAFETY: `Self::call` cannot be called after dropping in place.
-    #[inline(always)]
-    pub unsafe fn drop_in_place(&mut self) {
-        unsafe { (self.drop_in_place_fn)(&mut self.slot) }
+impl<T> fmt::Debug for Thunk<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Thunk -> {}", type_name::<T>())
     }
 }

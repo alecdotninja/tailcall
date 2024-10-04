@@ -1,5 +1,5 @@
 //! This crate contains the procedural macro implementation for the [tailcall] crate.
-//! It is not designed to be used dierctly.
+//! It is not designed to be used directly.
 //! [tailcall]: https://crates.io/crates/tailcall
 
 #![deny(

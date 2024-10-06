@@ -1,71 +1,26 @@
-//! This module provides a simple, zero-cost [trampoline]. It is designed to be used by the
-//! [`tailcall`] macro, but it can also be used manually.
-//!
-//! # Usage
-//!
-//! Express the contents of a recusive function as a step function (`Fn(Input) -> Next<Input, Output>`).
-//! To guarantee that only a single stack frame will be used at all levels of optimization, annotate it
-//! with `#[inline(always)]` attribute. This step function and an initial input can then be passed to
-//! [`run`] which will recusively call it until it resolves to an output.
-//!
-//! ```
-//! // fn gcd(a: u64, b: u64) -> u64 {
-//! //     if b == 0 {
-//! //         a
-//! //     } else {
-//! //         gcd(b, a % b)
-//! //     }
-//! // }
-//!
-//! #[inline(always)]
-//! fn gcd_step((a, b): (u64, u64)) -> tailcall::trampoline::Next<(u64, u64), u64> {
-//!     if b == 0 {
-//!         tailcall::trampoline::Finish(a)
-//!     } else {
-//!         tailcall::trampoline::Recurse((b, a % b))
-//!     }
-//! }
-//!
-//! fn gcd(a: u64, b: u64) -> u64 {
-//!
-//!     tailcall::trampoline::run(gcd_step, (a, b))
-//! }
-//! ```
-//!
-//! [trampoline]: https://en.wikipedia.org/wiki/Tail_call#Through_trampolining
-//! [`tailcall`]: ../tailcall_impl/attr.tailcall.html
-//! [`run`]: fn.run.html
-//!
+use crate::thunk::Thunk;
 
-/// This is the output of the step function. It indicates to [run] what should happen next.
-///
-/// [run]: fn.run.html
-#[derive(Debug)]
-pub enum Next<Input, Output> {
-    /// This variant indicates that the step function should be run again with the provided input.
-    Recurse(Input),
-
-    /// This variant indicates that there are no more steps to be taken and the provided output should be returned.
-    Finish(Output),
+pub enum Action<'a, T> {
+    Done(T),
+    Call(Thunk<'a, Self>),
 }
 
-pub use Next::*;
+pub const fn done<'a, T>(value: T) -> Action<'a, T> {
+    Action::Done(value)
+}
 
-/// Runs a step function aginast a particular input until it resolves to an output.
-#[inline(always)]
-pub fn run<StepFn, Input, Output>(step: StepFn, mut input: Input) -> Output
+pub const fn call<'a, T, F>(fn_once: F) -> Action<'a, T>
 where
-    StepFn: Fn(Input) -> Next<Input, Output>,
+    F: FnOnce() -> Action<'a, T> + 'a,
 {
+    Action::Call(Thunk::new(fn_once))
+}
+
+pub fn run<T>(mut action: Action<'_, T>) -> T {
     loop {
-        match step(input) {
-            Recurse(new_input) => {
-                input = new_input;
-                continue;
-            }
-            Finish(output) => {
-                break output;
-            }
+        match action {
+            Action::Call(thunk) => action = thunk.call(),
+            Action::Done(value) => return value,
         }
     }
 }

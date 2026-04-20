@@ -12,10 +12,12 @@ union SlotView<T, const SIZE: usize> {
 }
 
 impl<const SIZE: usize> Slot<SIZE> {
+    // `Slot<SIZE>` can store any `T` that fits within the slot's full layout, including any tail
+    // padding introduced by the alignment on `Slot` itself.
     pub(crate) const fn new<T>(value: T) -> Self {
         assert!(
             align_of::<T>() <= align_of::<Self>(),
-            "unsupport value alignment",
+            "unsupported value alignment",
         );
 
         assert!(

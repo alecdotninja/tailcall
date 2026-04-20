@@ -28,10 +28,12 @@ fn factorial(input: u64) -> Result<u64, Error> {
 
 #[tailcall]
 #[allow(dead_code)]
-fn add_iter<'a, I>(mut int_iter: I, accum: i32) -> Result<i32, ()>
+fn add_iter<'a, I>(int_iter: I, accum: i32) -> Result<i32, ()>
 where
     I: Iterator<Item = &'a i32>,
 {
+    let mut int_iter = int_iter;
+
     match int_iter.next() {
         Some(i) => tailcall::call! { add_iter(int_iter, accum + i) },
         None => Ok(accum),

@@ -4,13 +4,21 @@
 [![Current Crates.io Version](https://img.shields.io/crates/v/tailcall.svg)](https://crates.io/crates/tailcall)
 [![Docs](https://docs.rs/tailcall/badge.svg)](https://docs.rs/tailcall)
 
-Tailcall is a library that adds safe, zero-cost [tail recursion](https://en.wikipedia.org/wiki/Tail_call) to stable Rust.
+`tailcall` provides stack-safe tail calls on stable Rust.
 
-Eventually, it will be superseded by the [`become` keyword](https://internals.rust-lang.org/t/pre-rfc-explicit-proper-tail-calls/3797/16).
+It does this with an explicit trampoline runtime backed by a small stack-allocated thunk slot. The
+macro API rewrites a function into:
+
+- a public wrapper that calls `tailcall::trampoline::run(...)`
+- a hidden builder function that produces `tailcall::trampoline::Action` values
+
+This is still a trampoline approach, but it no longer rewrites recursive calls into a local loop.
+Instead, each tail step is represented as a thunk and executed by the runtime.
+
+Eventually, this crate may be superseded by the
+[`become` keyword](https://internals.rust-lang.org/t/pre-rfc-explicit-proper-tail-calls/3797/16).
 
 ## Installation
-
-Tailcall is distributed as a [crate](https://crates.io/crates/tailcall).
 
 Add this to your `Cargo.toml`:
 
@@ -21,7 +29,7 @@ tailcall = "~1"
 
 ## Usage
 
-Add the `tailcall` attribute to functions which you would like to use tail recursion:
+Mark a function with `#[tailcall]`, and use `tailcall::call!` at each recursive tail-call site:
 
 ```rust
 use tailcall::tailcall;
@@ -31,129 +39,190 @@ fn gcd(a: u64, b: u64) -> u64 {
     if b == 0 {
         a
     } else {
-        gcd(b, a % b)
+        tailcall::call! { gcd(b, a % b) }
+    }
+}
+
+assert_eq!(gcd(12, 18), 6);
+```
+
+The explicit `tailcall::call!` is part of the API now. Recursive calls are not rewritten
+implicitly.
+
+### More Macro Examples
+
+The macro also works well for stateful traversals over borrowed input:
+
+```rust
+use tailcall::tailcall;
+
+#[tailcall]
+fn sum_csv_numbers(rest: &[u8], total: u64, current: u64) -> u64 {
+    match rest {
+        [digit @ b'0'..=b'9', tail @ ..] => {
+            let current = current * 10 + u64::from(digit - b'0');
+            tailcall::call! { sum_csv_numbers(tail, total, current) }
+        }
+        [b' ' | b',', tail @ ..] => {
+            let total = total + current;
+            tailcall::call! { sum_csv_numbers(tail, total, 0) }
+        }
+        [] => total + current,
+        [_other, tail @ ..] => {
+            tailcall::call! { sum_csv_numbers(tail, total, current) }
+        }
+    }
+}
+
+assert_eq!(sum_csv_numbers(b"10, 20, 3", 0, 0), 33);
+```
+
+Most users should only need `#[tailcall]` plus `tailcall::call!`.
+
+### Macro-Based Mutual Recursion
+
+Mutual recursion works through the macro too. Each participating function just needs
+`#[tailcall]`, and each tail-call site must use `tailcall::call!`:
+
+```rust
+use tailcall::tailcall;
+
+#[tailcall]
+fn is_even(x: u128) -> bool {
+    if x == 0 {
+        true
+    } else {
+        tailcall::call! { is_odd(x - 1) }
+    }
+}
+
+#[tailcall]
+fn is_odd(x: u128) -> bool {
+    if x == 0 {
+        false
+    } else {
+        tailcall::call! { is_even(x - 1) }
+    }
+}
+
+assert!(is_even(1000));
+assert!(is_odd(1001));
+```
+
+### Advanced: Direct Runtime
+
+The runtime can also be used directly:
+
+```rust
+use tailcall::trampoline;
+
+fn is_even(x: u128) -> bool {
+    trampoline::run(build_is_even_action(x))
+}
+
+#[inline(always)]
+fn build_is_even_action(x: u128) -> trampoline::Action<'static, bool> {
+    trampoline::call(move || {
+        if x > 0 {
+            build_is_odd_action(x - 1)
+        } else {
+            trampoline::done(true)
+        }
+    })
+}
+
+fn is_odd(x: u128) -> bool {
+    trampoline::run(build_is_odd_action(x))
+}
+
+#[inline(always)]
+fn build_is_odd_action(x: u128) -> trampoline::Action<'static, bool> {
+    trampoline::call(move || {
+        if x > 0 {
+            build_is_even_action(x - 1)
+        } else {
+            trampoline::done(false)
+        }
+    })
+}
+```
+
+The direct runtime is still useful as an escape hatch for advanced manual control. For example,
+one function can skip separators while another reads digits from the same slice, passing control
+back and forth through `trampoline::Action`.
+
+## Macro Expansion Shape
+
+At a high level, this:
+
+```rust
+#[tailcall]
+fn gcd(a: u64, b: u64) -> u64 {
+    if b == 0 {
+        a
+    } else {
+        tailcall::call! { gcd(b, a % b) }
     }
 }
 ```
 
-For more detailed information (including some limitations), please see [the docs](https://docs.rs/tailcall).
-
-## Implementation
-
-The core idea is to rewrite the function into a loop using the [trampoline approach](https://en.wikipedia.org/wiki/Tail_call#Through_trampolining).
-Here is the (slightly reformatted) expansion for the `gcd` example above:
+becomes roughly:
 
 ```rust
 fn gcd(a: u64, b: u64) -> u64 {
-    tailcall::trampoline::run(
-        #[inline(always)] |(a, b)| {
-            tailcall::trampoline::Finish({
-                if b == 0 {
-                    a
-                } else {
-                    return tailcall::trampoline::Recurse((b, a % b))
-                }
-            })
-        },
-        (a, b),
-    )
+    tailcall::trampoline::run(__tailcall_build_gcd(a, b))
+}
+
+#[inline(always)]
+fn __tailcall_build_gcd<'tailcall>(a: u64, b: u64) -> tailcall::trampoline::Action<'tailcall, u64> {
+    tailcall::trampoline::call(move || {
+        if b == 0 {
+            tailcall::trampoline::done(a)
+        } else {
+            __tailcall_build_gcd(b, a % b)
+        }
+    })
 }
 ```
 
-You can view the exact expansion for the `tailcall` macro in your use-case with `cargo expand`.
+The exact expansion is different in edge cases, but this is the core model.
+
+## Limitations
+
+Current macro limitations:
+
+- Tail-call sites must use `tailcall::call! { path(args...) }`.
+- `#[tailcall]` does not support methods or `self` receivers.
+- Function arguments must use simple identifier patterns.
+- `?` is not supported inside `#[tailcall]` functions on stable Rust. Use `match` or explicit
+  early returns instead.
+- `async fn` and `const fn` are not supported.
+
+The runtime itself can be used directly if the macro is too restrictive for a particular use case.
+
+## Safety Notes
+
+The thunk runtime uses unsafe code internally to type-erase `FnOnce` values into a fixed-size stack
+slot. The current test suite includes:
+
+- ordinary correctness tests
+- stack-behavior tests
+- destructor-behavior tests
+- Miri runs over the runtime-oriented tests
 
 ## Development
 
-Development dependencies, testing, documentation generation, packaging, and distribution are all managed via [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html).
+Common commands:
 
-After checking out the repo, run `cargo test` to verify the test suite.
-The latest documentation can be generated with `cargo doc`.
-Before commiting, please make sure code is formatted canonically with `cargo fmt` and passes all lints with `cargo clippy`.
-New versions are released to [crates.io](https://crates.io/crates/tailcall) with `cargo publish`.
-
-## Benchmarks
-
-There are a few benchmarks available; currently the benchmarks demonstrate that for
-single-function tail-recursion, performance is the same as using a loop. Mutual
-recursion runs, but suffers penalties.
-
-```
-$ cargo bench
-    Finished bench [optimized] target(s) in 0.05s
-     Running target/release/deps/tailcall-b55b2bddb07cb046
-
-running 0 tests
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-
-     Running target/release/deps/bench-b8ab29e7ebef8d8d
-
-running 4 tests
-test bench_oddness_boom   ... bench:           6 ns/iter (+/- 0)
-test bench_oddness_loop   ... bench:           6 ns/iter (+/- 0)
-test bench_oddness_mutrec ... bench:   4,509,915 ns/iter (+/- 7,095,455)
-test bench_oddness_rec    ... bench:           3 ns/iter (+/- 0)
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 4 measured; 0 filtered out
+```bash
+cargo test
+cargo +nightly miri test --all
+cargo fmt --all
+cargo clippy --all
 ```
 
-If the optimization level is set to zero so that `bench_oddness_boom` isn't cleverly
-optimized away, it blows the stack as expected:
-
-```
-$ RUSTFLAGS="-C opt-level=0" cargo bench _boom
-    Finished bench [optimized] target(s) in 0.05s
-     Running target/release/deps/tailcall-b55b2bddb07cb046
-
-running 0 tests
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-
-     Running target/release/deps/bench-b8ab29e7ebef8d8d
-
-running 1 test
-
-thread 'main' has overflowed its stack
-fatal runtime error: stack overflow
-```
-
-In fact the same occurs when running `RUSTFLAGS="-C opt-level=0" cargo bench _mutrec`
-, indicating mutual recursion can also blow the stack, but the `loop` and tailrec-enabled
-single-function, tail-recursive functions enjoy TCO:
-
-```
-$ RUSTFLAGS="-C opt-level=0" cargo bench _loop
-    Finished bench [optimized] target(s) in 0.06s
-     Running target/release/deps/tailcall-b55b2bddb07cb046
-
-running 0 tests
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-
-     Running target/release/deps/bench-b8ab29e7ebef8d8d
-
-running 1 test
-test bench_oddness_loop   ... bench:   4,514,730 ns/iter (+/- 7,498,984)
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 1 measured; 3 filtered out
-
-
-$ RUSTFLAGS="-C opt-level=0" cargo bench _rec
-    Finished bench [optimized] target(s) in 0.05s
-     Running target/release/deps/tailcall-b55b2bddb07cb046
-
-running 0 tests
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-
-     Running target/release/deps/bench-b8ab29e7ebef8d8d
-
-running 1 test
-test bench_oddness_rec    ... bench:  22,416,962 ns/iter (+/- 16,083,896)
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 1 measured; 3 filtered out
-```
-
+The stack-depth test is skipped under Miri because it measures backtrace shape rather than memory
+safety.
 
 ## Contributing
 
@@ -161,6 +230,8 @@ Bug reports and pull requests are welcome on [GitHub](https://github.com/alecdot
 
 ## License
 
-Tailcall is distributed under the terms of both the MIT license and the Apache License (Version 2.0).
+Tailcall is distributed under the terms of both the MIT license and the Apache License (Version
+2.0).
 
-See [LICENSE-APACHE](LICENSE-APACHE) and [LICENSE-MIT](LICENSE-MIT), and [COPYRIGHT](COPYRIGHT) for details.
+See [LICENSE-APACHE](LICENSE-APACHE), [LICENSE-MIT](LICENSE-MIT), and [COPYRIGHT](COPYRIGHT) for
+details.

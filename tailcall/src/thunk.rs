@@ -1,4 +1,9 @@
-use core::{any::type_name, fmt, marker::PhantomData, mem::transmute, ptr::drop_in_place};
+//! Type-erased `FnOnce` storage for the trampoline runtime.
+//!
+//! A [`crate::thunk::Thunk`] stores the captured data for a single `FnOnce` in a fixed-size stack
+//! slot together with the function pointers needed to either call it or drop it in place.
+
+use core::{any::type_name, fmt, marker::PhantomData, mem::ManuallyDrop, ptr::{drop_in_place, read}};
 
 use crate::slot::Slot;
 
@@ -9,6 +14,7 @@ type CallFn<T> = fn(ThunkSlot) -> T;
 type DropInPlaceFn = unsafe fn(*mut ThunkSlot);
 
 #[repr(transparent)]
+/// A type-erased `FnOnce` stored in the trampoline runtime's stack slot.
 pub struct Thunk<'a, T = ()> {
     inner: Inner<'a, T>,
 }
@@ -21,6 +27,10 @@ struct Inner<'a, T> {
 }
 
 impl<'a, T> Thunk<'a, T> {
+    /// Creates a new thunk from a `FnOnce`.
+    ///
+    /// The closure's captured state is stored inline in a fixed-size slot. Construction will panic
+    /// if the closure's size or alignment exceeds the slot budget chosen by the runtime.
     pub const fn new<F>(fn_once: F) -> Self
     where
         F: FnOnce() -> T + 'a,
@@ -42,12 +52,17 @@ impl<'a, T> Thunk<'a, T> {
     }
 
     #[inline(always)]
+    /// Calls the stored `FnOnce`, consuming the thunk in the process.
+    ///
+    /// Because the thunk owns a `FnOnce`, it can only be called once.
     pub fn call(self) -> T {
-        // SAFETY: `Thunk` is a transparent wrapper around `Inner`. This also
-        // ensures that the `Drop` impl will not run.
+        let this = ManuallyDrop::new(self);
+
+        // SAFETY: `this` will not be dropped, so moving `inner` out cannot cause `Thunk::drop`
+        // to run after the closure has been taken from the slot.
         let Inner {
             slot, call_impl, ..
-        } = unsafe { transmute(self) };
+        } = unsafe { read(&this.inner) };
 
         call_impl(slot)
     }

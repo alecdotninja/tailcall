@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use backtrace::Backtrace;
 use tailcall::*;
 

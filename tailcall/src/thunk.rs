@@ -86,3 +86,102 @@ impl<T> fmt::Debug for Thunk<'_, T> {
         write!(f, "Thunk -> {}", type_name::<T>())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+
+    use super::Thunk;
+    use std::{
+        cell::Cell,
+        panic::{catch_unwind, AssertUnwindSafe},
+        rc::Rc,
+    };
+
+    #[test]
+    fn sanity() {
+        let thunk = Thunk::new(|| 42);
+        assert_eq!(42, thunk.call());
+    }
+
+    #[test]
+    fn with_captures() {
+        let x = 1;
+        let y = 2;
+
+        let thunk = Thunk::new(move || x + y);
+
+        assert_eq!(3, thunk.call());
+    }
+
+    #[test]
+    #[should_panic]
+    fn with_too_many_captures() {
+        let a: u64 = 1;
+        let b: u64 = 2;
+        let c: u64 = 3;
+        let d: u64 = 4;
+        let e: u64 = 5;
+        let f: u64 = 6;
+        let g: u64 = 7;
+        let h: u64 = 8;
+
+        Thunk::new(move || a + b + c + d + e + f + g + h);
+    }
+
+    #[test]
+    fn dropping_without_call_runs_destructor_once() {
+        let drops = Rc::new(Cell::new(0));
+        let tracker = DropTracker {
+            drops: Rc::clone(&drops),
+        };
+        let thunk = Thunk::new(move || {
+            let _tracker = tracker;
+        });
+
+        drop(thunk);
+
+        assert_eq!(drops.get(), 1);
+    }
+
+    #[test]
+    fn calling_runs_destructor_once() {
+        let drops = Rc::new(Cell::new(0));
+        let tracker = DropTracker {
+            drops: Rc::clone(&drops),
+        };
+        let thunk = Thunk::new(move || {
+            let _tracker = tracker;
+        });
+
+        thunk.call();
+
+        assert_eq!(drops.get(), 1);
+    }
+
+    #[test]
+    fn panic_during_call_drops_capture_once() {
+        let drops = Rc::new(Cell::new(0));
+        let tracker = DropTracker {
+            drops: Rc::clone(&drops),
+        };
+        let thunk = Thunk::new(move || {
+            let _tracker = tracker;
+            panic!("boom");
+        });
+
+        let _ = catch_unwind(AssertUnwindSafe(|| thunk.call()));
+
+        assert_eq!(drops.get(), 1);
+    }
+
+    struct DropTracker {
+        drops: Rc<Cell<usize>>,
+    }
+
+    impl Drop for DropTracker {
+        fn drop(&mut self) {
+            self.drops.set(self.drops.get() + 1);
+        }
+    }
+}

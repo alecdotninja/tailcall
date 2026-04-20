@@ -4,7 +4,7 @@
 //!
 //! - the [`tailcall`] attribute macro, which rewrites a function to execute through the
 //!   trampoline runtime
-//! - the runtime itself, exposed through [`trampoline`] and [`thunk`]
+//! - the runtime itself, exposed through [`trampoline`]
 //!
 //! The macro-based API is explicit at recursive call sites. Any tail call that should be executed
 //! through the trampoline must use [`call!`]:
@@ -190,7 +190,6 @@
 pub use tailcall_impl::{call, tailcall};
 
 pub(crate) mod slot;
-/// Type-erased `FnOnce` storage used by the trampoline runtime.
-pub mod thunk;
+pub(crate) mod thunk;
 /// The stack-reusing trampoline runtime used by the public macro.
 pub mod trampoline;

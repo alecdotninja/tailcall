@@ -6,7 +6,7 @@
 
 `tailcall` provides stack-safe tail calls on stable Rust.
 
-It does this with an explicit trampoline runtime backed by a small stack-allocated thunk slot. The
+It does this with an explicit trampoline runtime backed by a small stack-allocated internal thunk slot. The
 macro API rewrites a function into:
 
 - a public wrapper that calls `tailcall::trampoline::run(...)`

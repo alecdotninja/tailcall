@@ -18,7 +18,7 @@ fn is_odd_loop(x: u128) -> bool {
 #[tailcall]
 fn is_odd_rec_go(x: u128, odd: bool) -> bool {
     if x > 0 {
-        is_odd_rec_go(x - 1, !odd)
+        tailcall::call! { is_odd_rec_go(x - 1, !odd) }
     } else {
         odd
     }
@@ -31,7 +31,10 @@ fn is_odd_rec(x: u128) -> bool {
 #[tailcall]
 fn is_odd_rec_res_go(x: u128, odd: Result<bool, ()>) -> Result<bool, ()> {
     if x > 0 {
-        is_odd_rec_res_go(x - 1, Ok(!odd?))
+        match odd {
+            Ok(odd) => tailcall::call! { is_odd_rec_res_go(x - 1, Ok(!odd)) },
+            Err(err) => Err(err),
+        }
     } else {
         odd
     }
@@ -57,7 +60,7 @@ fn is_odd_boom(x: u128) -> bool {
 #[tailcall]
 fn is_even_mutrec(x: u128) -> bool {
     if x > 0 {
-        is_odd_mutrec(x - 1)
+        tailcall::call! { is_odd_mutrec(x - 1) }
     } else {
         true
     }
@@ -66,7 +69,7 @@ fn is_even_mutrec(x: u128) -> bool {
 #[tailcall]
 fn is_odd_mutrec(x: u128) -> bool {
     if x > 0 {
-        is_even_mutrec(x - 1)
+        tailcall::call! { is_even_mutrec(x - 1) }
     } else {
         false
     }

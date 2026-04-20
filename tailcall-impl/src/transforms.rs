@@ -36,8 +36,11 @@ pub fn expand_call_macro(tokens: TokenStream) -> TokenStream {
         };
     }
 
-    Error::new(Span::call_site(), "tailcall::call! expects either `path(args...)` or `self.method(args...)`")
-        .to_compile_error()
+    Error::new(
+        Span::call_site(),
+        "tailcall::call! expects either `path(args...)` or `self.method(args...)`",
+    )
+    .to_compile_error()
 }
 
 pub fn apply_method_tailcall_transform(method: ImplItemMethod) -> TokenStream {
@@ -129,14 +132,14 @@ impl TailcallTransform {
 fn reject_unsupported_signature(sig: &Signature) -> Result<(), Error> {
     if sig.constness.is_some() {
         return Err(Error::new_spanned(
-            &sig.constness,
+            sig.constness,
             "#[tailcall] does not support const functions",
         ));
     }
 
     if sig.asyncness.is_some() {
         return Err(Error::new_spanned(
-            &sig.asyncness,
+            sig.asyncness,
             "#[tailcall] does not support async functions",
         ));
     }
@@ -201,8 +204,9 @@ impl TailPositionRewriter {
                 if_token,
                 cond: Box::new(self.fold_expr(*cond)),
                 then_branch: self.rewrite_tail_block(then_branch),
-                else_branch: else_branch
-                    .map(|(else_token, expr)| (else_token, Box::new(self.rewrite_tail_expr(*expr)))),
+                else_branch: else_branch.map(|(else_token, expr)| {
+                    (else_token, Box::new(self.rewrite_tail_expr(*expr)))
+                }),
             }),
             Expr::Match(ExprMatch {
                 attrs,
@@ -294,5 +298,6 @@ impl Fold for TailPositionRewriter {
 }
 
 fn expand_call_expr(expr_macro: ExprMacro) -> Expr {
-    parse2(expand_call_macro(expr_macro.mac.tokens)).expect("tailcall::call! should expand to an expression")
+    parse2(expand_call_macro(expr_macro.mac.tokens))
+        .expect("tailcall::call! should expand to an expression")
 }

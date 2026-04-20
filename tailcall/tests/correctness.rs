@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+#[cfg(not(miri))]
 use std::path::Path;
 use tailcall::*;
 
@@ -235,6 +236,7 @@ fn test_mutable_receiver_methods_work_with_tailcall() {
     assert!(accumulator.steps > 0);
 }
 
+#[cfg(not(miri))]
 #[tailcall]
 fn recurse_with_metadata(n: u64) -> u64 {
     let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
@@ -247,6 +249,7 @@ fn recurse_with_metadata(n: u64) -> u64 {
     }
 }
 
+#[cfg(not(miri))]
 #[test]
 fn test_issue_18_non_tail_setup_before_recursive_call() {
     let result = recurse_with_metadata(1);

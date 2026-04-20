@@ -26,7 +26,8 @@ pub fn helper_signature(sig: &Signature) -> Signature {
         .params
         .push(parse_quote!(#tailcall_lifetime));
     rewrite_elided_lifetimes_in_inputs(&mut helper_sig.inputs, &tailcall_lifetime);
-    helper_sig.output = parse_quote! { -> tailcall::trampoline::Action<#tailcall_lifetime, #output_ty> };
+    helper_sig.output =
+        parse_quote! { -> tailcall::trampoline::Action<#tailcall_lifetime, #output_ty> };
 
     let where_clause = helper_sig.generics.make_where_clause();
     for generic_param in &sig.generics.params {
@@ -83,7 +84,9 @@ pub fn helper_path_from_call(expr_call: &ExprCall) -> Result<Path, Error> {
     }
 }
 
-pub fn helper_method_call_tokens(expr_method_call: &ExprMethodCall) -> Result<proc_macro2::TokenStream, Error> {
+pub fn helper_method_call_tokens(
+    expr_method_call: &ExprMethodCall,
+) -> Result<proc_macro2::TokenStream, Error> {
     if !matches!(
         &*expr_method_call.receiver,
         Expr::Path(ExprPath { path, .. }) if path.is_ident("self")
@@ -135,7 +138,8 @@ pub fn method_helper_signature(sig: &Signature) -> Result<Signature, Error> {
         .params
         .push(parse_quote!(#tailcall_lifetime));
     rewrite_method_inputs(&mut helper_sig.inputs, &tailcall_lifetime)?;
-    helper_sig.output = parse_quote! { -> tailcall::trampoline::Action<#tailcall_lifetime, #output_ty> };
+    helper_sig.output =
+        parse_quote! { -> tailcall::trampoline::Action<#tailcall_lifetime, #output_ty> };
 
     let where_clause = helper_sig.generics.make_where_clause();
     for generic_param in &sig.generics.params {
@@ -166,7 +170,9 @@ fn rewrite_method_inputs(
     for input in inputs {
         match input {
             FnArg::Receiver(receiver) => rewrite_receiver(receiver, lifetime),
-            FnArg::Typed(pat_type) => rewrite_elided_lifetimes_in_type(pat_type.ty.as_mut(), lifetime),
+            FnArg::Typed(pat_type) => {
+                rewrite_elided_lifetimes_in_type(pat_type.ty.as_mut(), lifetime)
+            }
         }
     }
 
@@ -204,15 +210,23 @@ fn rewrite_elided_lifetimes_in_type(ty: &mut Type, lifetime: &Lifetime) {
             }
             rewrite_elided_lifetimes_in_type(elem.as_mut(), lifetime);
         }
-        Type::Slice(type_slice) => rewrite_elided_lifetimes_in_type(type_slice.elem.as_mut(), lifetime),
-        Type::Array(type_array) => rewrite_elided_lifetimes_in_type(type_array.elem.as_mut(), lifetime),
+        Type::Slice(type_slice) => {
+            rewrite_elided_lifetimes_in_type(type_slice.elem.as_mut(), lifetime)
+        }
+        Type::Array(type_array) => {
+            rewrite_elided_lifetimes_in_type(type_array.elem.as_mut(), lifetime)
+        }
         Type::Tuple(type_tuple) => {
             for elem in &mut type_tuple.elems {
                 rewrite_elided_lifetimes_in_type(elem, lifetime);
             }
         }
-        Type::Paren(type_paren) => rewrite_elided_lifetimes_in_type(type_paren.elem.as_mut(), lifetime),
-        Type::Group(type_group) => rewrite_elided_lifetimes_in_type(type_group.elem.as_mut(), lifetime),
+        Type::Paren(type_paren) => {
+            rewrite_elided_lifetimes_in_type(type_paren.elem.as_mut(), lifetime)
+        }
+        Type::Group(type_group) => {
+            rewrite_elided_lifetimes_in_type(type_group.elem.as_mut(), lifetime)
+        }
         _ => {}
     }
 }

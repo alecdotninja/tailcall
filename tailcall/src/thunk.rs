@@ -3,7 +3,13 @@
 //! A [`crate::thunk::Thunk`] stores the captured data for a single `FnOnce` in a fixed-size stack
 //! slot together with the function pointers needed to either call it or drop it in place.
 
-use core::{any::type_name, fmt, marker::PhantomData, mem::ManuallyDrop, ptr::{drop_in_place, read}};
+use core::{
+    any::type_name,
+    fmt,
+    marker::PhantomData,
+    mem::ManuallyDrop,
+    ptr::{drop_in_place, read},
+};
 
 use crate::slot::Slot;
 

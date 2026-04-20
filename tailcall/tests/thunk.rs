@@ -1,9 +1,9 @@
-use tailcall::thunk::Thunk;
 use std::{
     panic::{catch_unwind, AssertUnwindSafe},
     rc::Rc,
     sync::atomic::{AtomicUsize, Ordering},
 };
+use tailcall::thunk::Thunk;
 
 #[test]
 fn sanity() {

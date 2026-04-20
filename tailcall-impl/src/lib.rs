@@ -1,6 +1,6 @@
 //! This crate contains the procedural macro implementation for the
 //! <https://crates.io/crates/tailcall> crate.
-//! It is not designed to be used dierctly.
+//! It is not designed to be used directly.
 
 #![deny(
     missing_docs,
@@ -95,7 +95,7 @@ use syn::{parse_macro_input, ImplItemMethod, ItemFn};
 ///
 /// impl Factorialable for u64 {
 ///     #[tailcall]
-    ///     fn calc_factorial(self, accumulator: u64) -> u64 {
+///     fn calc_factorial(self, accumulator: u64) -> u64 {
 /// //                    ^^^^ Trait methods are not supported yet.
 ///         if self > 0 {
 ///             (self - 1).calc_factorial(self * accumulator)

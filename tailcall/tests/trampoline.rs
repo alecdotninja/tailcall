@@ -57,10 +57,7 @@ fn sum_csv_numbers(input: &str) -> u64 {
 
 #[doc(hidden)]
 #[inline(always)]
-fn build_skip_separators_action<'a>(
-    rest: &'a [u8],
-    total: u64,
-) -> trampoline::Action<'a, u64> {
+fn build_skip_separators_action<'a>(rest: &'a [u8], total: u64) -> trampoline::Action<'a, u64> {
     trampoline::call(move || match rest {
         [b' ' | b',', tail @ ..] => build_skip_separators_action(tail, total),
         [] => trampoline::done(total),

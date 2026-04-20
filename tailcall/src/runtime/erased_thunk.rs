@@ -1,7 +1,7 @@
-//! Type-erased `FnOnce` storage for the trampoline runtime.
+//! Type-erased `FnOnce` storage for the thunk runtime.
 //!
-//! A [`crate::thunk::Thunk`] stores the captured data for a single `FnOnce` in a fixed-size stack
-//! slot together with the function pointers needed to either call it or drop it in place.
+//! An [`ErasedThunk`] stores the captured data for a single `FnOnce` in a fixed-size stack slot
+//! together with the function pointers needed to either call it or drop it in place.
 
 use core::{
     any::type_name,
@@ -11,7 +11,7 @@ use core::{
     ptr::{drop_in_place, read},
 };
 
-use crate::slot::Slot;
+use super::slot::Slot;
 
 const MAX_THUNK_DATA_SIZE: usize = 48;
 
@@ -20,8 +20,8 @@ type CallFn<T> = fn(ThunkSlot) -> T;
 type DropInPlaceFn = unsafe fn(*mut ThunkSlot);
 
 #[repr(transparent)]
-/// A type-erased `FnOnce` stored in the trampoline runtime's stack slot.
-pub struct Thunk<'a, T = ()> {
+/// A type-erased `FnOnce` stored in the runtime's stack slot.
+pub(crate) struct ErasedThunk<'a, T = ()> {
     inner: Inner<'a, T>,
 }
 
@@ -32,12 +32,12 @@ struct Inner<'a, T> {
     _marker: PhantomData<dyn FnOnce() -> T + 'a>,
 }
 
-impl<'a, T> Thunk<'a, T> {
-    /// Creates a new thunk from a `FnOnce`.
+impl<'a, T> ErasedThunk<'a, T> {
+    /// Creates a new erased thunk from a `FnOnce`.
     ///
     /// The closure's captured state is stored inline in a fixed-size slot. Construction will panic
     /// if the closure's size or alignment exceeds the slot budget chosen by the runtime.
-    pub const fn new<F>(fn_once: F) -> Self
+    pub(crate) const fn new<F>(fn_once: F) -> Self
     where
         F: FnOnce() -> T + 'a,
     {
@@ -58,13 +58,11 @@ impl<'a, T> Thunk<'a, T> {
     }
 
     #[inline(always)]
-    /// Calls the stored `FnOnce`, consuming the thunk in the process.
-    ///
-    /// Because the thunk owns a `FnOnce`, it can only be called once.
-    pub fn call(self) -> T {
+    /// Calls the stored `FnOnce`, consuming the erased thunk in the process.
+    pub(crate) fn call(self) -> T {
         let this = ManuallyDrop::new(self);
 
-        // SAFETY: `this` will not be dropped, so moving `inner` out cannot cause `Thunk::drop`
+        // SAFETY: `this` will not be dropped, so moving `inner` out cannot cause `Drop`
         // to run after the closure has been taken from the slot.
         let Inner {
             slot, call_impl, ..
@@ -74,16 +72,16 @@ impl<'a, T> Thunk<'a, T> {
     }
 }
 
-impl<T> Drop for Thunk<'_, T> {
+impl<T> Drop for ErasedThunk<'_, T> {
     fn drop(&mut self) {
         // SAFETY: We own the slot, and it cannot be used after dropping.
         unsafe { (self.inner.drop_in_place_impl)(&mut self.inner.slot) }
     }
 }
 
-impl<T> fmt::Debug for Thunk<'_, T> {
+impl<T> fmt::Debug for ErasedThunk<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Thunk -> {}", type_name::<T>())
+        write!(f, "ErasedThunk -> {}", type_name::<T>())
     }
 }
 
@@ -91,16 +89,12 @@ impl<T> fmt::Debug for Thunk<'_, T> {
 mod tests {
     extern crate std;
 
-    use super::Thunk;
-    use std::{
-        cell::Cell,
-        panic::{catch_unwind, AssertUnwindSafe},
-        rc::Rc,
-    };
+    use super::ErasedThunk;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
 
     #[test]
     fn sanity() {
-        let thunk = Thunk::new(|| 42);
+        let thunk = ErasedThunk::new(|| 42);
         assert_eq!(42, thunk.call());
     }
 
@@ -109,7 +103,7 @@ mod tests {
         let x = 1;
         let y = 2;
 
-        let thunk = Thunk::new(move || x + y);
+        let thunk = ErasedThunk::new(move || x + y);
 
         assert_eq!(3, thunk.call());
     }
@@ -126,16 +120,16 @@ mod tests {
         let g: u64 = 7;
         let h: u64 = 8;
 
-        Thunk::new(move || a + b + c + d + e + f + g + h);
+        let _ = ErasedThunk::new(move || a + b + c + d + e + f + g + h);
     }
 
     #[test]
     fn dropping_without_call_runs_destructor_once() {
-        let drops = Rc::new(Cell::new(0));
+        let drops = std::rc::Rc::new(std::cell::Cell::new(0));
         let tracker = DropTracker {
-            drops: Rc::clone(&drops),
+            drops: std::rc::Rc::clone(&drops),
         };
-        let thunk = Thunk::new(move || {
+        let thunk = ErasedThunk::new(move || {
             let _tracker = tracker;
         });
 
@@ -146,11 +140,11 @@ mod tests {
 
     #[test]
     fn calling_runs_destructor_once() {
-        let drops = Rc::new(Cell::new(0));
+        let drops = std::rc::Rc::new(std::cell::Cell::new(0));
         let tracker = DropTracker {
-            drops: Rc::clone(&drops),
+            drops: std::rc::Rc::clone(&drops),
         };
-        let thunk = Thunk::new(move || {
+        let thunk = ErasedThunk::new(move || {
             let _tracker = tracker;
         });
 
@@ -161,11 +155,11 @@ mod tests {
 
     #[test]
     fn panic_during_call_drops_capture_once() {
-        let drops = Rc::new(Cell::new(0));
+        let drops = std::rc::Rc::new(std::cell::Cell::new(0));
         let tracker = DropTracker {
-            drops: Rc::clone(&drops),
+            drops: std::rc::Rc::clone(&drops),
         };
-        let thunk = Thunk::new(move || {
+        let thunk = ErasedThunk::new(move || {
             let _tracker = tracker;
             panic!("boom");
         });
@@ -176,7 +170,7 @@ mod tests {
     }
 
     struct DropTracker {
-        drops: Rc<Cell<usize>>,
+        drops: std::rc::Rc<std::cell::Cell<usize>>,
     }
 
     impl Drop for DropTracker {

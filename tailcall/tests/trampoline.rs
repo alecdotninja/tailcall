@@ -1,4 +1,4 @@
-use tailcall::trampoline;
+use tailcall::Thunk;
 
 #[test]
 fn is_even_redux() {
@@ -20,59 +20,55 @@ fn sums_csv_numbers_with_mutual_recursion() {
 }
 
 fn is_even(x: u128) -> bool {
-    trampoline::run(build_is_even_action(x))
+    build_is_even_action(x).call()
 }
 
 #[doc(hidden)]
 #[inline(always)]
-fn build_is_even_action(x: u128) -> trampoline::Action<'static, bool> {
-    trampoline::call(move || {
+fn build_is_even_action(x: u128) -> Thunk<'static, bool> {
+    Thunk::bounce(move || {
         if x > 0 {
             build_is_odd_action(x - 1)
         } else {
-            trampoline::done(true)
+            Thunk::value(true)
         }
     })
 }
 
 fn is_odd(x: u128) -> bool {
-    trampoline::run(build_is_odd_action(x))
+    build_is_odd_action(x).call()
 }
 
 #[doc(hidden)]
 #[inline(always)]
-fn build_is_odd_action(x: u128) -> trampoline::Action<'static, bool> {
-    trampoline::call(move || {
+fn build_is_odd_action(x: u128) -> Thunk<'static, bool> {
+    Thunk::bounce(move || {
         if x > 0 {
             build_is_even_action(x - 1)
         } else {
-            trampoline::done(false)
+            Thunk::value(false)
         }
     })
 }
 
 fn sum_csv_numbers(input: &str) -> u64 {
-    trampoline::run(build_skip_separators_action(input.as_bytes(), 0))
+    build_skip_separators_action(input.as_bytes(), 0).call()
 }
 
 #[doc(hidden)]
 #[inline(always)]
-fn build_skip_separators_action<'a>(rest: &'a [u8], total: u64) -> trampoline::Action<'a, u64> {
-    trampoline::call(move || match rest {
+fn build_skip_separators_action<'a>(rest: &'a [u8], total: u64) -> Thunk<'a, u64> {
+    Thunk::bounce(move || match rest {
         [b' ' | b',', tail @ ..] => build_skip_separators_action(tail, total),
-        [] => trampoline::done(total),
+        [] => Thunk::value(total),
         _ => build_read_number_action(rest, total, 0),
     })
 }
 
 #[doc(hidden)]
 #[inline(always)]
-fn build_read_number_action<'a>(
-    rest: &'a [u8],
-    total: u64,
-    current: u64,
-) -> trampoline::Action<'a, u64> {
-    trampoline::call(move || match rest {
+fn build_read_number_action<'a>(rest: &'a [u8], total: u64, current: u64) -> Thunk<'a, u64> {
+    Thunk::bounce(move || match rest {
         [digit @ b'0'..=b'9', tail @ ..] => {
             let current = current * 10 + u64::from(digit - b'0');
             build_read_number_action(tail, total, current)

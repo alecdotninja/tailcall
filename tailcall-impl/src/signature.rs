@@ -1,12 +1,10 @@
 use proc_macro2::Span;
 use syn::{
-    parse_quote, Error, Expr, ExprCall, ExprMethodCall, ExprPath, FnArg, GenericParam, Ident,
-    Lifetime, Pat, PatIdent, PatType, Path, Receiver, ReturnType, Signature, Type, TypeReference,
+    parse_quote, Error, Expr, FnArg, GenericParam, Lifetime, Pat, PatIdent, PatType, Receiver,
+    ReturnType, Signature, Type, TypeReference,
 };
 
-pub fn helper_ident(fn_name: &Ident) -> Ident {
-    Ident::new(&format!("__tailcall_build_{}", fn_name), fn_name.span())
-}
+use crate::naming::helper_ident;
 
 pub fn output_type(output: &ReturnType) -> Type {
     match output {
@@ -26,8 +24,7 @@ pub fn helper_signature(sig: &Signature) -> Signature {
         .params
         .push(parse_quote!(#tailcall_lifetime));
     rewrite_elided_lifetimes_in_inputs(&mut helper_sig.inputs, &tailcall_lifetime);
-    helper_sig.output =
-        parse_quote! { -> tailcall::trampoline::Action<#tailcall_lifetime, #output_ty> };
+    helper_sig.output = parse_quote! { -> tailcall::Thunk<#tailcall_lifetime, #output_ty> };
 
     let where_clause = helper_sig.generics.make_where_clause();
     for generic_param in &sig.generics.params {
@@ -49,6 +46,41 @@ pub fn helper_signature(sig: &Signature) -> Signature {
     }
 
     helper_sig
+}
+
+pub fn method_helper_signature(sig: &Signature) -> Result<Signature, Error> {
+    let mut helper_sig = sig.clone();
+    let output_ty = output_type(&sig.output);
+    let tailcall_lifetime = Lifetime::new("'tailcall", Span::call_site());
+
+    helper_sig.ident = helper_ident(&sig.ident);
+    helper_sig
+        .generics
+        .params
+        .push(parse_quote!(#tailcall_lifetime));
+    rewrite_method_inputs(&mut helper_sig.inputs, &tailcall_lifetime)?;
+    helper_sig.output = parse_quote! { -> tailcall::Thunk<#tailcall_lifetime, #output_ty> };
+
+    let where_clause = helper_sig.generics.make_where_clause();
+    for generic_param in &sig.generics.params {
+        match generic_param {
+            GenericParam::Type(type_param) => {
+                let ident = &type_param.ident;
+                where_clause
+                    .predicates
+                    .push(parse_quote!(#ident: #tailcall_lifetime));
+            }
+            GenericParam::Lifetime(lifetime_def) => {
+                let lifetime = &lifetime_def.lifetime;
+                where_clause
+                    .predicates
+                    .push(parse_quote!(#lifetime: #tailcall_lifetime));
+            }
+            GenericParam::Const(_) => {}
+        }
+    }
+
+    Ok(helper_sig)
 }
 
 pub fn function_argument_exprs(sig: &Signature) -> Result<Vec<Expr>, Error> {
@@ -72,95 +104,6 @@ fn argument_expr(fn_arg: &FnArg) -> Result<Expr, Error> {
             )),
         },
     }
-}
-
-pub fn helper_path_from_call(expr_call: &ExprCall) -> Result<Path, Error> {
-    match &*expr_call.func {
-        Expr::Path(ExprPath { path, .. }) => Ok(helper_path_for(path)),
-        func => Err(Error::new_spanned(
-            func,
-            "tailcall::call! expects a direct function path like `foo(...)` or `module::foo(...)`",
-        )),
-    }
-}
-
-pub fn helper_method_call_tokens(
-    expr_method_call: &ExprMethodCall,
-) -> Result<proc_macro2::TokenStream, Error> {
-    if !matches!(
-        &*expr_method_call.receiver,
-        Expr::Path(ExprPath { path, .. }) if path.is_ident("self")
-    ) {
-        return Err(Error::new_spanned(
-            &expr_method_call.receiver,
-            "tailcall::call! only supports method syntax on `self`; use `Self::method(self, ...)` for other receivers",
-        ));
-    }
-
-    let helper = helper_ident(&expr_method_call.method);
-    let args = &expr_method_call.args;
-
-    Ok(parse_quote! { self.#helper(#args) })
-}
-
-pub fn is_tailcall_macro(path: &Path) -> bool {
-    match path.segments.last() {
-        Some(last) if last.ident == "call" => {}
-        _ => return false,
-    }
-
-    match path.segments.len() {
-        1 => true,
-        2 => path.segments[0].ident == "tailcall",
-        _ => false,
-    }
-}
-
-fn helper_path_for(path: &Path) -> Path {
-    let mut helper_path = path.clone();
-    let last_segment = helper_path
-        .segments
-        .last_mut()
-        .expect("function path should have at least one segment");
-
-    last_segment.ident = helper_ident(&last_segment.ident);
-    helper_path
-}
-
-pub fn method_helper_signature(sig: &Signature) -> Result<Signature, Error> {
-    let mut helper_sig = sig.clone();
-    let output_ty = output_type(&sig.output);
-    let tailcall_lifetime = Lifetime::new("'tailcall", Span::call_site());
-
-    helper_sig.ident = helper_ident(&sig.ident);
-    helper_sig
-        .generics
-        .params
-        .push(parse_quote!(#tailcall_lifetime));
-    rewrite_method_inputs(&mut helper_sig.inputs, &tailcall_lifetime)?;
-    helper_sig.output =
-        parse_quote! { -> tailcall::trampoline::Action<#tailcall_lifetime, #output_ty> };
-
-    let where_clause = helper_sig.generics.make_where_clause();
-    for generic_param in &sig.generics.params {
-        match generic_param {
-            GenericParam::Type(type_param) => {
-                let ident = &type_param.ident;
-                where_clause
-                    .predicates
-                    .push(parse_quote!(#ident: #tailcall_lifetime));
-            }
-            GenericParam::Lifetime(lifetime_def) => {
-                let lifetime = &lifetime_def.lifetime;
-                where_clause
-                    .predicates
-                    .push(parse_quote!(#lifetime: #tailcall_lifetime));
-            }
-            GenericParam::Const(_) => {}
-        }
-    }
-
-    Ok(helper_sig)
 }
 
 fn rewrite_method_inputs(

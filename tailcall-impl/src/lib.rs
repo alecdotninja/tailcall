@@ -16,8 +16,11 @@
 
 extern crate proc_macro;
 
-mod helpers;
-mod transforms;
+mod call_syntax;
+mod expand;
+mod naming;
+mod rewrite;
+mod signature;
 
 use proc_macro::TokenStream;
 use syn::{parse_macro_input, ImplItemMethod, ItemFn};
@@ -113,14 +116,14 @@ pub fn tailcall(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
 
     let output = if let Ok(input) = syn::parse::<ImplItemMethod>(tokens) {
         if matches!(input.sig.inputs.first(), Some(syn::FnArg::Receiver(_))) {
-            transforms::apply_method_tailcall_transform(input)
+            expand::apply_method_tailcall_transform(input)
         } else {
             let input = parse_macro_input!(tokens_clone as ItemFn);
-            transforms::apply_fn_tailcall_transform(input)
+            expand::apply_fn_tailcall_transform(input)
         }
     } else {
         let input = parse_macro_input!(tokens_clone as ItemFn);
-        transforms::apply_fn_tailcall_transform(input)
+        expand::apply_fn_tailcall_transform(input)
     };
 
     TokenStream::from(output)
@@ -139,5 +142,5 @@ pub fn tailcall(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
 /// attribute. The call site itself must remain in tail position.
 #[proc_macro]
 pub fn call(tokens: TokenStream) -> TokenStream {
-    TokenStream::from(transforms::expand_call_macro(tokens.into()))
+    TokenStream::from(call_syntax::expand_call_macro(tokens.into()))
 }

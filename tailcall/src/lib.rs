@@ -4,7 +4,7 @@
 //!
 //! - the [`tailcall`] attribute macro, which rewrites a function to execute through the
 //!   trampoline runtime
-//! - the runtime itself, exposed through [`trampoline`]
+//! - the low-level runtime type, exposed as [`Thunk`]
 //!
 //! The macro-based API is explicit at recursive call sites. Any tail call that should be executed
 //! through the trampoline must use [`call!`]:
@@ -162,6 +162,142 @@
 //! assert_eq!(weighted_countdown(8), 24);
 //! ```
 //!
+//! In practice, most users should stop here. The macro handles the trampoline machinery and lets
+//! you write recursive code directly, with [`call!`] marking the tail-recursive transitions.
+//!
+//! ## Manual `Thunk`
+//!
+//! If you need direct control over the runtime, the low-level API is [`Thunk`].
+//! A [`Thunk`] represents a deferred value from a computation.
+//!
+//! You can construct one in three ways:
+//!
+//! - [`Thunk::value`] wraps a value directly
+//! - [`Thunk::new`] wraps a closure that will produce the value
+//! - [`Thunk::bounce`] wraps a closure that will produce another [`Thunk`], which will then
+//!   provide the value
+//!
+//! The full computation is resolved with [`Thunk::call`].
+//!
+//! A manual runtime implementation usually looks like this:
+//!
+//! ```rust
+//! use tailcall::Thunk;
+//!
+//! fn is_even(x: u128) -> bool {
+//!     __tailcall_build_is_even_thunk(x).call()
+//! }
+//!
+//! fn __tailcall_build_is_even_thunk(x: u128) -> Thunk<'static, bool> {
+//!     Thunk::bounce(move || {
+//!         if x == 0 {
+//!             Thunk::value(true)
+//!         } else {
+//!             __tailcall_build_is_odd_thunk(x - 1)
+//!         }
+//!     })
+//! }
+//!
+//! fn __tailcall_build_is_odd_thunk(x: u128) -> Thunk<'static, bool> {
+//!     Thunk::bounce(move || {
+//!         if x == 0 {
+//!             Thunk::value(false)
+//!         } else {
+//!             __tailcall_build_is_even_thunk(x - 1)
+//!         }
+//!     })
+//! }
+//!
+//! assert!(is_even(1000));
+//! ```
+//!
+//! [`Thunk::new`] is a convenience for the common case where one deferred step immediately
+//! resolves to a final value:
+//!
+//! ```rust
+//! use tailcall::Thunk;
+//!
+//! fn answer() -> i32 {
+//!     Thunk::new(|| 42).call()
+//! }
+//!
+//! assert_eq!(answer(), 42);
+//! ```
+//!
+//! Borrowed input works too. The lifetime on [`Thunk`] tracks anything captured by the deferred
+//! computation:
+//!
+//! ```rust
+//! use tailcall::Thunk;
+//!
+//! fn sum_csv(input: &str) -> u64 {
+//!     __tailcall_build_skip_separators_thunk(input.as_bytes(), 0).call()
+//! }
+//!
+//! fn __tailcall_build_skip_separators_thunk<'a>(rest: &'a [u8], total: u64) -> Thunk<'a, u64> {
+//!     Thunk::bounce(move || match rest {
+//!         [b' ' | b',', tail @ ..] => __tailcall_build_skip_separators_thunk(tail, total),
+//!         [] => Thunk::value(total),
+//!         _ => __tailcall_build_read_number_thunk(rest, total, 0),
+//!     })
+//! }
+//!
+//! fn __tailcall_build_read_number_thunk<'a>(rest: &'a [u8], total: u64, current: u64) -> Thunk<'a, u64> {
+//!     Thunk::bounce(move || match rest {
+//!         [digit @ b'0'..=b'9', tail @ ..] => {
+//!             let current = current * 10 + u64::from(digit - b'0');
+//!             __tailcall_build_read_number_thunk(tail, total, current)
+//!         }
+//!         _ => __tailcall_build_skip_separators_thunk(rest, total + current),
+//!     })
+//! }
+//!
+//! assert_eq!(sum_csv("10, 20, 3"), 33);
+//! ```
+//!
+//! The primary limitation of [`Thunk`] is that it type-erases the deferred closure into a fixed
+//! inline slot. That means each deferred closure can capture at most 48 bytes of data on the
+//! current implementation. If the closure's captures are larger than that, construction will
+//! panic.
+//!
+//! ## How The Macro Fits
+//!
+//! `#[tailcall]` generates the same kind of `Thunk`-returning helper that you would write by
+//! hand and then calls [`Thunk::call`] in the public wrapper.
+//!
+//! At a high level, this:
+//!
+//! ```rust
+//! use tailcall::tailcall;
+//!
+//! #[tailcall]
+//! fn gcd(a: u64, b: u64) -> u64 {
+//!     if b == 0 {
+//!         a
+//!     } else {
+//!         tailcall::call! { gcd(b, a % b) }
+//!     }
+//! }
+//! ```
+//!
+//! behaves roughly like:
+//!
+//! ```rust
+//! fn gcd(a: u64, b: u64) -> u64 {
+//!     __tailcall_build_gcd_thunk(a, b).call()
+//! }
+//!
+//! fn __tailcall_build_gcd_thunk<'tailcall>(a: u64, b: u64) -> tailcall::Thunk<'tailcall, u64> {
+//!     tailcall::Thunk::bounce(move || {
+//!         if b == 0 {
+//!             tailcall::Thunk::value(a)
+//!         } else {
+//!             __tailcall_build_gcd_thunk(b, a % b)
+//!         }
+//!     })
+//! }
+//! ```
+//!
 //! Limitations of the current macro:
 //!
 //! - tail-call sites must be written as `tailcall::call! { path(args...) }` or
@@ -172,10 +308,11 @@
 //! - trait methods are not supported yet
 //! - mixed recursion is allowed, but only `tailcall::call!` sites are trampoline-backed; plain
 //!   recursive calls still use the native call stack
+//! - each generated helper is backed by a [`Thunk`], so very large argument lists or captures can
+//!   exceed the 48-byte deferred-closure budget
 //!
-//! The runtime can also be used directly through [`trampoline::Action`], [`trampoline::call`],
-//! [`trampoline::done`], and [`trampoline::run`] when you want to build the state machine
-//! yourself, but most users should only need the macro API shown above.
+//! The runtime can also be used directly through [`Thunk`] when you want to build the state
+//! machine yourself, but most users should only need the macro API shown above.
 //!
 #![no_std]
 #![deny(
@@ -188,9 +325,7 @@
     unused_qualifications
 )]
 
+pub use runtime::Thunk;
 pub use tailcall_impl::{call, tailcall};
 
-pub(crate) mod slot;
-pub(crate) mod thunk;
-/// The stack-reusing trampoline runtime used by the public macro.
-pub mod trampoline;
+mod runtime;

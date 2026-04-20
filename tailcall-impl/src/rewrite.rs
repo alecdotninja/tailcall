@@ -1,158 +1,17 @@
-use proc_macro2::{Span, TokenStream};
-use quote::quote;
 use syn::{
     fold::{self, Fold},
-    parse2, parse_quote, Error, Expr, ExprBlock, ExprCall, ExprIf, ExprMacro, ExprMatch,
-    ExprMethodCall, ExprReturn, ExprTry, ImplItemMethod, ItemFn, Signature, Stmt,
+    parse2, parse_quote, Error, Expr, ExprBlock, ExprIf, ExprMacro, ExprMatch, ExprReturn, ExprTry,
+    ItemFn, Stmt,
 };
 
-use super::helpers::{
-    function_argument_exprs, helper_method_call_tokens, helper_path_from_call, helper_signature,
-    is_tailcall_macro, method_helper_signature,
-};
+use crate::call_syntax::{expand_call_macro, is_tailcall_macro};
 
-pub fn apply_fn_tailcall_transform(item_fn: ItemFn) -> TokenStream {
-    match TailcallTransform::new(item_fn).expand() {
-        Ok(output) => output,
-        Err(error) => error.to_compile_error(),
-    }
-}
-
-pub fn expand_call_macro(tokens: TokenStream) -> TokenStream {
-    if let Ok(expr_call) = parse2::<ExprCall>(tokens.clone()) {
-        return match helper_path_from_call(&expr_call) {
-            Ok(func) => {
-                let args = expr_call.args;
-                quote! { #func(#args) }
-            }
-            Err(error) => error.to_compile_error(),
-        };
-    }
-
-    if let Ok(expr_method_call) = parse2::<ExprMethodCall>(tokens.clone()) {
-        return match helper_method_call_tokens(&expr_method_call) {
-            Ok(tokens) => tokens,
-            Err(error) => error.to_compile_error(),
-        };
-    }
-
-    Error::new(
-        Span::call_site(),
-        "tailcall::call! expects either `path(args...)` or `self.method(args...)`",
-    )
-    .to_compile_error()
-}
-
-pub fn apply_method_tailcall_transform(method: ImplItemMethod) -> TokenStream {
-    match TailcallMethodTransform::new(method).expand() {
-        Ok(output) => output,
-        Err(error) => error.to_compile_error(),
-    }
-}
-
-struct TailcallTransform {
-    item_fn: ItemFn,
-}
-
-struct TailcallMethodTransform {
-    method: ImplItemMethod,
-}
-
-impl TailcallMethodTransform {
-    fn new(method: ImplItemMethod) -> Self {
-        Self { method }
-    }
-
-    fn expand(self) -> Result<TokenStream, Error> {
-        let ImplItemMethod {
-            attrs,
-            vis,
-            defaultness,
-            sig,
-            block,
-        } = self.method;
-
-        reject_unsupported_signature(&sig)?;
-
-        let helper_sig = method_helper_signature(&sig)?;
-        let helper_fn_ident = &helper_sig.ident;
-        let helper_args = function_argument_exprs(&sig)?;
-        let helper_block = TailPositionRewriter::rewrite(block)?;
-
-        Ok(quote! {
-            #(#attrs)*
-            #defaultness #vis #sig {
-                tailcall::trampoline::run(Self::#helper_fn_ident(#(#helper_args),*))
-            }
-
-            #[doc(hidden)]
-            #[inline(always)]
-            #helper_sig {
-                tailcall::trampoline::call(move || #helper_block)
-            }
-        })
-    }
-}
-
-impl TailcallTransform {
-    fn new(item_fn: ItemFn) -> Self {
-        Self { item_fn }
-    }
-
-    fn expand(self) -> Result<TokenStream, Error> {
-        let ItemFn {
-            attrs,
-            vis,
-            sig,
-            block,
-        } = self.item_fn;
-
-        reject_unsupported_signature(&sig)?;
-
-        let helper_sig = helper_signature(&sig);
-        let helper_fn_ident = &helper_sig.ident;
-        let helper_args = function_argument_exprs(&sig)?;
-        let helper_block = TailPositionRewriter::rewrite(*block)?;
-
-        Ok(quote! {
-            #(#attrs)*
-            #vis #sig {
-                tailcall::trampoline::run(#helper_fn_ident(#(#helper_args),*))
-            }
-
-            #[doc(hidden)]
-            #[inline(always)]
-            #helper_sig {
-                tailcall::trampoline::call(move || #helper_block)
-            }
-        })
-    }
-}
-
-fn reject_unsupported_signature(sig: &Signature) -> Result<(), Error> {
-    if sig.constness.is_some() {
-        return Err(Error::new_spanned(
-            sig.constness,
-            "#[tailcall] does not support const functions",
-        ));
-    }
-
-    if sig.asyncness.is_some() {
-        return Err(Error::new_spanned(
-            sig.asyncness,
-            "#[tailcall] does not support async functions",
-        ));
-    }
-
-    Ok(())
-}
-
-struct TailPositionRewriter {
+pub struct TailPositionRewriter {
     error: Option<Error>,
 }
 
 impl TailPositionRewriter {
-    fn rewrite(block: syn::Block) -> Result<syn::Block, Error> {
+    pub fn rewrite(block: syn::Block) -> Result<syn::Block, Error> {
         let mut rewriter = Self { error: None };
         let block = rewriter.rewrite_tail_block(block);
 
@@ -235,7 +94,7 @@ impl TailPositionRewriter {
             }
             expr => {
                 let expr = self.fold_expr(expr);
-                parse_quote! { tailcall::trampoline::done(#expr) }
+                parse_quote! { tailcall::Thunk::value(#expr) }
             }
         }
     }

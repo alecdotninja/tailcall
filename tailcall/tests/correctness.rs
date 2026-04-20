@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 use tailcall::*;
 
 fn factorial(input: u64) -> u64 {
@@ -232,4 +233,23 @@ fn test_mutable_receiver_methods_work_with_tailcall() {
 
     assert_eq!(total, 33);
     assert!(accumulator.steps > 0);
+}
+
+#[tailcall]
+fn recurse_with_metadata(n: u64) -> u64 {
+    let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+    let len = file.metadata().unwrap().len();
+
+    if n >= 1_000 {
+        n
+    } else {
+        tailcall::call! { recurse_with_metadata(len + n) }
+    }
+}
+
+#[test]
+fn test_issue_18_non_tail_setup_before_recursive_call() {
+    let result = recurse_with_metadata(1);
+
+    assert!(result >= 1_000);
 }

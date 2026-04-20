@@ -203,7 +203,21 @@ rest of the algorithm is not.
 
 ### Advanced: Direct Runtime
 
-The runtime can also be used directly:
+The public runtime surface is:
+
+- `trampoline::Action`
+- `trampoline::call`
+- `trampoline::done`
+- `trampoline::run`
+
+The usual pattern is:
+
+1. write an entry-point function that calls `trampoline::run(...)`
+2. write one or more builder functions that return `trampoline::Action`
+3. return `trampoline::done(...)` for terminal states
+4. return another builder function's `Action` for recursive transitions
+
+For example:
 
 ```rust
 use tailcall::trampoline;
@@ -241,7 +255,8 @@ fn build_is_odd_action(x: u128) -> trampoline::Action<'static, bool> {
 
 The direct runtime is still useful as an escape hatch for advanced manual control. For example,
 one function can skip separators while another reads digits from the same slice, passing control
-back and forth through `trampoline::Action`.
+back and forth by returning `trampoline::Action` values until `trampoline::run` produces the final
+result.
 
 ## Macro Expansion Shape
 

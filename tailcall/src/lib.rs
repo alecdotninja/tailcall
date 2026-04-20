@@ -173,8 +173,9 @@
 //! - mixed recursion is allowed, but only `tailcall::call!` sites are trampoline-backed; plain
 //!   recursive calls still use the native call stack
 //!
-//! The runtime can also be used directly for advanced manual control, but most users should only
-//! need the macro API shown above.
+//! The runtime can also be used directly through [`trampoline::Action`], [`trampoline::call`],
+//! [`trampoline::done`], and [`trampoline::run`] when you want to build the state machine
+//! yourself, but most users should only need the macro API shown above.
 //!
 #![no_std]
 #![deny(

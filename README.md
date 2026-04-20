@@ -318,6 +318,45 @@ cargo clippy --all
 The stack-depth test is skipped under Miri because it measures backtrace shape rather than memory
 safety.
 
+## Release Process
+
+This workspace publishes two crates:
+
+- `tailcall-impl`
+- `tailcall`
+
+Release them together.
+
+1. Update the workspace version in the root [Cargo.toml](Cargo.toml).
+2. Update the matching versions in the root `workspace.dependencies` section.
+3. Update the installation snippet in this README if the major version changed.
+4. Run:
+
+```bash
+cargo test
+cargo +nightly miri test --all
+cargo bench --all --no-run
+```
+
+5. Publish `tailcall-impl` first:
+
+```bash
+cargo publish -p tailcall-impl
+```
+
+6. Publish `tailcall` after `tailcall-impl` is available on crates.io:
+
+```bash
+cargo publish -p tailcall
+```
+
+7. Tag the release from `main`:
+
+```bash
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
+git push origin vX.Y.Z
+```
+
 ## Contributing
 
 Bug reports and pull requests are welcome on [GitHub](https://github.com/alecdotninja/tailcall).

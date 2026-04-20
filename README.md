@@ -315,9 +315,6 @@ cargo fmt --all
 cargo clippy --all
 ```
 
-The stack-depth test is skipped under Miri because it measures backtrace shape rather than memory
-safety.
-
 ## Release Process
 
 This workspace publishes two crates:

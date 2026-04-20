@@ -274,6 +274,10 @@ impl Fold for TailPositionRewriter {
                 })
             }
             Expr::Macro(expr_macro) if is_tailcall_macro(&expr_macro.mac.path) => {
+                self.reject(Error::new_spanned(
+                    &expr_macro,
+                    "tailcall::call! must be used in tail position",
+                ));
                 expand_call_expr(expr_macro)
             }
             expr => fold::fold_expr(self, expr),

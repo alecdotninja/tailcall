@@ -253,3 +253,27 @@ fn test_issue_18_non_tail_setup_before_recursive_call() {
 
     assert!(result >= 1_000);
 }
+
+#[tailcall]
+fn mixed_recursion_sum(n: u64) -> u64 {
+    match n {
+        0 => 0,
+        1 => tailcall::call! { mixed_recursion_sum(0) },
+        _ if n % 2 == 0 => {
+            let partial = mixed_recursion_sum(n - 1);
+            n + partial
+        }
+        _ => tailcall::call! { mixed_recursion_sum(n - 1) },
+    }
+}
+
+#[test]
+fn test_mixed_recursion_allows_plain_non_tail_calls() {
+    assert_eq!(mixed_recursion_sum(0), 0);
+    assert_eq!(mixed_recursion_sum(1), 0);
+    assert_eq!(mixed_recursion_sum(2), 2);
+    assert_eq!(mixed_recursion_sum(3), 2);
+    assert_eq!(mixed_recursion_sum(4), 6);
+    assert_eq!(mixed_recursion_sum(5), 6);
+    assert_eq!(mixed_recursion_sum(6), 12);
+}

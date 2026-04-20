@@ -143,6 +143,64 @@ let parity = Parity;
 assert!(parity.is_even(1000));
 ```
 
+### Mixed Recursion
+
+Mixed recursion also works in a single `#[tailcall]` function. Only call sites wrapped in
+`tailcall::call!` are trampoline-backed; plain recursive calls stay ordinary Rust calls:
+
+```rust
+use tailcall::tailcall;
+
+#[tailcall]
+fn mixed_recursion_sum(n: u64) -> u64 {
+    match n {
+        0 => 0,
+        1 => tailcall::call! { mixed_recursion_sum(0) },
+        _ if n % 2 == 0 => {
+            let partial = mixed_recursion_sum(n - 1);
+            n + partial
+        }
+        _ => tailcall::call! { mixed_recursion_sum(n - 1) },
+    }
+}
+
+assert_eq!(mixed_recursion_sum(6), 12);
+```
+
+If only part of a larger algorithm is tail-recursive, it can still be cleaner to put that part in
+a helper and annotate the helper:
+
+```rust
+use tailcall::tailcall;
+
+fn factorial(n: u64) -> u64 {
+    #[tailcall]
+    fn factorial_inner(acc: u64, n: u64) -> u64 {
+        if n == 0 {
+            acc
+        } else {
+            tailcall::call! { factorial_inner(acc * n, n - 1) }
+        }
+    }
+
+    factorial_inner(1, n)
+}
+
+fn weighted_countdown(n: u64) -> u64 {
+    if n <= 3 {
+        n + factorial(n)
+    } else {
+        factorial(n / 2)
+    }
+}
+
+assert_eq!(weighted_countdown(3), 9);
+assert_eq!(weighted_countdown(8), 24);
+```
+
+This helper pattern is often the cleanest approach when one inner phase is tail-recursive and the
+rest of the algorithm is not.
+
 ### Advanced: Direct Runtime
 
 The runtime can also be used directly:
@@ -230,6 +288,8 @@ Current macro limitations:
 - `?` is not supported inside `#[tailcall]` functions on stable Rust. Use `match` or explicit
   early returns instead.
 - Trait methods are not supported yet.
+- In mixed recursion, only `tailcall::call!` sites are trampoline-backed; plain recursive calls
+  still use the native call stack.
 - `async fn` and `const fn` are not supported.
 
 The runtime itself can be used directly if the macro is too restrictive for a particular use case.

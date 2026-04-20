@@ -66,6 +66,20 @@ use syn::{parse_macro_input, ImplItemMethod, ItemFn};
 /// }
 /// ```
 ///
+/// ```compile_fail
+/// use tailcall::tailcall;
+///
+/// #[tailcall]
+/// fn factorial(input: u64) -> u64 {
+///     if input > 0 {
+///         1 + tailcall::call! { factorial(input - 1) }
+/// //          ^^^^^^^^^^^^^^^ This is not allowed.
+///     } else {
+///         1
+///     }
+/// }
+/// ```
+///
 /// - Methods in `impl` blocks are supported, but trait methods are not:
 ///
 /// ```compile_fail

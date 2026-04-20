@@ -1,13 +1,14 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
     fold::{self, Fold},
     parse2, parse_quote, Error, Expr, ExprBlock, ExprCall, ExprIf, ExprMacro, ExprMatch,
-    ExprReturn, ExprTry, ItemFn, Signature, Stmt,
+    ExprMethodCall, ExprReturn, ExprTry, ImplItemMethod, ItemFn, Signature, Stmt,
 };
 
 use super::helpers::{
-    function_argument_exprs, helper_path_from_call, helper_signature, is_tailcall_macro,
+    function_argument_exprs, helper_method_call_tokens, helper_path_from_call, helper_signature,
+    is_tailcall_macro, method_helper_signature,
 };
 
 pub fn apply_fn_tailcall_transform(item_fn: ItemFn) -> TokenStream {
@@ -18,21 +19,76 @@ pub fn apply_fn_tailcall_transform(item_fn: ItemFn) -> TokenStream {
 }
 
 pub fn expand_call_macro(tokens: TokenStream) -> TokenStream {
-    match parse2::<ExprCall>(tokens) {
-        Ok(expr_call) => match helper_path_from_call(&expr_call) {
+    if let Ok(expr_call) = parse2::<ExprCall>(tokens.clone()) {
+        return match helper_path_from_call(&expr_call) {
             Ok(func) => {
                 let args = expr_call.args;
                 quote! { #func(#args) }
             }
             Err(error) => error.to_compile_error(),
-        },
-        Err(error) => Error::new(error.span(), "tailcall::call! expects a function call")
-            .to_compile_error(),
+        };
+    }
+
+    if let Ok(expr_method_call) = parse2::<ExprMethodCall>(tokens.clone()) {
+        return match helper_method_call_tokens(&expr_method_call) {
+            Ok(tokens) => tokens,
+            Err(error) => error.to_compile_error(),
+        };
+    }
+
+    Error::new(Span::call_site(), "tailcall::call! expects either `path(args...)` or `self.method(args...)`")
+        .to_compile_error()
+}
+
+pub fn apply_method_tailcall_transform(method: ImplItemMethod) -> TokenStream {
+    match TailcallMethodTransform::new(method).expand() {
+        Ok(output) => output,
+        Err(error) => error.to_compile_error(),
     }
 }
 
 struct TailcallTransform {
     item_fn: ItemFn,
+}
+
+struct TailcallMethodTransform {
+    method: ImplItemMethod,
+}
+
+impl TailcallMethodTransform {
+    fn new(method: ImplItemMethod) -> Self {
+        Self { method }
+    }
+
+    fn expand(self) -> Result<TokenStream, Error> {
+        let ImplItemMethod {
+            attrs,
+            vis,
+            defaultness,
+            sig,
+            block,
+        } = self.method;
+
+        reject_unsupported_signature(&sig)?;
+
+        let helper_sig = method_helper_signature(&sig)?;
+        let helper_fn_ident = &helper_sig.ident;
+        let helper_args = function_argument_exprs(&sig)?;
+        let helper_block = TailPositionRewriter::rewrite(block)?;
+
+        Ok(quote! {
+            #(#attrs)*
+            #defaultness #vis #sig {
+                tailcall::trampoline::run(Self::#helper_fn_ident(#(#helper_args),*))
+            }
+
+            #[doc(hidden)]
+            #[inline(always)]
+            #helper_sig {
+                tailcall::trampoline::call(move || #helper_block)
+            }
+        })
+    }
 }
 
 impl TailcallTransform {

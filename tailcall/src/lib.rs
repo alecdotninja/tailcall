@@ -78,13 +78,45 @@
 //! assert!(is_odd(1001));
 //! ```
 //!
+//! Methods in `impl` blocks are also supported:
+//!
+//! ```rust
+//! use tailcall::tailcall;
+//!
+//! struct Parity;
+//!
+//! impl Parity {
+//!     #[tailcall]
+//!     fn is_even(&self, x: u128) -> bool {
+//!         if x == 0 {
+//!             true
+//!         } else {
+//!             tailcall::call! { self.is_odd(x - 1) }
+//!         }
+//!     }
+//!
+//!     #[tailcall]
+//!     fn is_odd(&self, x: u128) -> bool {
+//!         if x == 0 {
+//!             false
+//!         } else {
+//!             tailcall::call! { self.is_even(x - 1) }
+//!         }
+//!     }
+//! }
+//!
+//! let parity = Parity;
+//! assert!(parity.is_even(1000));
+//! ```
+//!
 //! Limitations of the current macro:
 //!
-//! - tail-call sites must be written as `tailcall::call! { path(args...) }`
-//! - methods and `self` receivers are not supported
+//! - tail-call sites must be written as `tailcall::call! { path(args...) }` or
+//!   `tailcall::call! { self.method(args...) }`
 //! - argument patterns must be simple identifiers
 //! - `?` is not supported inside `#[tailcall]` functions on stable Rust; use `match` or explicit
 //!   early returns instead
+//! - trait methods are not supported yet
 //!
 //! The runtime can also be used directly for advanced manual control, but most users should only
 //! need the macro API shown above.

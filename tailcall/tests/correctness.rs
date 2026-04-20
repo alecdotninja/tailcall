@@ -165,3 +165,71 @@ fn test_mutual_recursion_via_macros() {
     assert!(!is_odd_macro(10_000));
     assert!(is_odd_macro(10_001));
 }
+
+struct MethodParity;
+
+impl MethodParity {
+    #[tailcall]
+    fn is_even(&self, x: u128) -> bool {
+        if x == 0 {
+            true
+        } else {
+            tailcall::call! { self.is_odd(x - 1) }
+        }
+    }
+
+    #[tailcall]
+    fn is_odd(&self, x: u128) -> bool {
+        if x == 0 {
+            false
+        } else {
+            tailcall::call! { self.is_even(x - 1) }
+        }
+    }
+}
+
+#[test]
+fn test_mutual_recursion_via_methods() {
+    let parity = MethodParity;
+
+    assert!(parity.is_even(10_000));
+    assert!(!parity.is_even(10_001));
+    assert!(!parity.is_odd(10_000));
+    assert!(parity.is_odd(10_001));
+}
+
+#[derive(Default)]
+struct MethodAccumulator {
+    steps: usize,
+}
+
+impl MethodAccumulator {
+    #[tailcall]
+    fn sum_csv(&mut self, rest: &[u8], total: u64, current: u64) -> u64 {
+        self.steps += 1;
+
+        match rest {
+            [digit @ b'0'..=b'9', tail @ ..] => {
+                let current = current * 10 + u64::from(digit - b'0');
+                tailcall::call! { self.sum_csv(tail, total, current) }
+            }
+            [b' ' | b',', tail @ ..] => {
+                let total = total + current;
+                tailcall::call! { self.sum_csv(tail, total, 0) }
+            }
+            [] => total + current,
+            [_other, tail @ ..] => {
+                tailcall::call! { self.sum_csv(tail, total, current) }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_mutable_receiver_methods_work_with_tailcall() {
+    let mut accumulator = MethodAccumulator::default();
+    let total = accumulator.sum_csv(b"10, 20, 3", 0, 0);
+
+    assert_eq!(total, 33);
+    assert!(accumulator.steps > 0);
+}

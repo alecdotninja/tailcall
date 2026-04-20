@@ -109,6 +109,40 @@ assert!(is_even(1000));
 assert!(is_odd(1001));
 ```
 
+### Methods
+
+Methods in `impl` blocks work too, including recursive calls written with method syntax on
+`self`:
+
+```rust
+use tailcall::tailcall;
+
+struct Parity;
+
+impl Parity {
+    #[tailcall]
+    fn is_even(&self, x: u128) -> bool {
+        if x == 0 {
+            true
+        } else {
+            tailcall::call! { self.is_odd(x - 1) }
+        }
+    }
+
+    #[tailcall]
+    fn is_odd(&self, x: u128) -> bool {
+        if x == 0 {
+            false
+        } else {
+            tailcall::call! { self.is_even(x - 1) }
+        }
+    }
+}
+
+let parity = Parity;
+assert!(parity.is_even(1000));
+```
+
 ### Advanced: Direct Runtime
 
 The runtime can also be used directly:
@@ -191,11 +225,11 @@ The exact expansion is different in edge cases, but this is the core model.
 
 Current macro limitations:
 
-- Tail-call sites must use `tailcall::call! { path(args...) }`.
-- `#[tailcall]` does not support methods or `self` receivers.
+- Tail-call sites must use `tailcall::call! { path(args...) }` or `tailcall::call! { self.method(args...) }`.
 - Function arguments must use simple identifier patterns.
 - `?` is not supported inside `#[tailcall]` functions on stable Rust. Use `match` or explicit
   early returns instead.
+- Trait methods are not supported yet.
 - `async fn` and `const fn` are not supported.
 
 The runtime itself can be used directly if the macro is too restrictive for a particular use case.

@@ -1,71 +1,42 @@
-//! This module provides a simple, zero-cost [trampoline]. It is designed to be used by the
-//! [`tailcall`] macro, but it can also be used manually.
+//! A stack-reusing trampoline runtime.
 //!
-//! # Usage
-//!
-//! Express the contents of a recusive function as a step function (`Fn(Input) -> Next<Input, Output>`).
-//! To guarantee that only a single stack frame will be used at all levels of optimization, annotate it
-//! with `#[inline(always)]` attribute. This step function and an initial input can then be passed to
-//! [`run`] which will recusively call it until it resolves to an output.
-//!
-//! ```
-//! // fn gcd(a: u64, b: u64) -> u64 {
-//! //     if b == 0 {
-//! //         a
-//! //     } else {
-//! //         gcd(b, a % b)
-//! //     }
-//! // }
-//!
-//! #[inline(always)]
-//! fn gcd_step((a, b): (u64, u64)) -> tailcall::trampoline::Next<(u64, u64), u64> {
-//!     if b == 0 {
-//!         tailcall::trampoline::Finish(a)
-//!     } else {
-//!         tailcall::trampoline::Recurse((b, a % b))
-//!     }
-//! }
-//!
-//! fn gcd(a: u64, b: u64) -> u64 {
-//!
-//!     tailcall::trampoline::run(gcd_step, (a, b))
-//! }
-//! ```
-//!
-//! [trampoline]: https://en.wikipedia.org/wiki/Tail_call#Through_trampolining
-//! [`tailcall`]: ../tailcall_impl/attr.tailcall.html
-//! [`run`]: fn.run.html
-//!
+//! The runtime repeatedly evaluates [`crate::trampoline::Action`] values until a terminal
+//! [`crate::trampoline::Action::Done`] is reached.
+//! [`crate::trampoline::Action::Call`] stores the next step as a [`crate::thunk::Thunk`],
+//! allowing each recursive step to reuse the same outer stack frame instead of recursing through
+//! Rust's native call stack.
 
-/// This is the output of the step function. It indicates to [run] what should happen next.
-///
-/// [run]: fn.run.html
-#[derive(Debug)]
-pub enum Next<Input, Output> {
-    /// This variant indicates that the step function should be run again with the provided input.
-    Recurse(Input),
+use crate::thunk::Thunk;
 
-    /// This variant indicates that there are no more steps to be taken and the provided output should be returned.
-    Finish(Output),
+/// The next step to be executed by the trampoline runtime.
+pub enum Action<'a, T> {
+    /// Finish the computation and return the contained value.
+    Done(T),
+    /// Execute the next thunk and continue the trampoline loop.
+    Call(Thunk<'a, Self>),
 }
 
-pub use Next::*;
+/// Produces a completed [`Action`].
+pub const fn done<'a, T>(value: T) -> Action<'a, T> {
+    Action::Done(value)
+}
 
-/// Runs a step function aginast a particular input until it resolves to an output.
-#[inline(always)]
-pub fn run<StepFn, Input, Output>(step: StepFn, mut input: Input) -> Output
+/// Produces a pending [`Action`] from a `FnOnce`.
+///
+/// The closure is executed later by [`run`].
+pub const fn call<'a, T, F>(fn_once: F) -> Action<'a, T>
 where
-    StepFn: Fn(Input) -> Next<Input, Output>,
+    F: FnOnce() -> Action<'a, T> + 'a,
 {
+    Action::Call(Thunk::new(fn_once))
+}
+
+/// Runs trampoline actions until they resolve to a final value.
+pub fn run<T>(mut action: Action<'_, T>) -> T {
     loop {
-        match step(input) {
-            Recurse(new_input) => {
-                input = new_input;
-                continue;
-            }
-            Finish(output) => {
-                break output;
-            }
+        match action {
+            Action::Call(thunk) => action = thunk.call(),
+            Action::Done(value) => return value,
         }
     }
 }

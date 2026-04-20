@@ -8,10 +8,16 @@ fn factorial(input: u64) -> Result<u64, Error> {
         accumulator: Result<u64, Error>,
         input: Result<u64, Error>,
     ) -> Result<u64, Error> {
-        let inp = input?;
-        let acc = accumulator?;
+        let inp = match input {
+            Ok(input) => input,
+            Err(error) => return Err(error),
+        };
+        let acc = match accumulator {
+            Ok(accumulator) => accumulator,
+            Err(error) => return Err(error),
+        };
         if inp > 0 {
-            factorial_inner(Ok(acc * inp), Ok(inp - 1))
+            tailcall::call! { factorial_inner(Ok(acc * inp), Ok(inp - 1)) }
         } else {
             Ok(acc)
         }
@@ -22,12 +28,14 @@ fn factorial(input: u64) -> Result<u64, Error> {
 
 #[tailcall]
 #[allow(dead_code)]
-fn add_iter<'a, I>(mut int_iter: I, accum: i32) -> Result<i32, ()>
+fn add_iter<'a, I>(int_iter: I, accum: i32) -> Result<i32, ()>
 where
     I: Iterator<Item = &'a i32>,
 {
+    let mut int_iter = int_iter;
+
     match int_iter.next() {
-        Some(i) => add_iter(int_iter, accum + i),
+        Some(i) => tailcall::call! { add_iter(int_iter, accum + i) },
         None => Ok(accum),
     }
 }

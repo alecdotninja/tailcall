@@ -4,10 +4,16 @@ use tailcall::*;
 fn factorial(input: u64) -> Option<u64> {
     #[tailcall]
     fn factorial_inner(accumulator: Option<u64>, input: Option<u64>) -> Option<u64> {
-        let inp = input?;
-        let acc = accumulator?;
+        let inp = match input {
+            Some(input) => input,
+            None => return None,
+        };
+        let acc = match accumulator {
+            Some(accumulator) => accumulator,
+            None => return None,
+        };
         if inp > 0 {
-            factorial_inner(Some(acc * inp), Some(inp - 1))
+            tailcall::call! { factorial_inner(Some(acc * inp), Some(inp - 1)) }
         } else {
             Some(acc)
         }
@@ -23,7 +29,7 @@ where
     I: Iterator<Item = &'a i32>,
 {
     match int_iter.next() {
-        Some(i) => add_iter(int_iter, accum + i),
+        Some(i) => tailcall::call! { add_iter(int_iter, accum + i) },
         None => Some(accum),
     }
 }

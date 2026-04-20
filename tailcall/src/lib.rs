@@ -8,7 +8,7 @@
     unused_qualifications
 )]
 
-pub use tailcall_impl::tailcall;
+pub use tailcall_impl::{call, tailcall};
 
 pub(crate) mod slot;
 pub mod thunk;

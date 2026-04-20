@@ -5,7 +5,7 @@ fn factorial(input: u64) -> u64 {
     #[tailcall]
     fn factorial_inner(accumulator: u64, input: u64) -> u64 {
         if input > 0 {
-            factorial_inner(accumulator * input, input - 1)
+            tailcall::call! { factorial_inner(accumulator * input, input - 1) }
         } else {
             accumulator
         }
@@ -29,7 +29,7 @@ fn memoized_factorial(input: u64, memo: &mut HashMap<u64, u64>) -> u64 {
         memo.insert(input, accumulator);
 
         if input > 0 {
-            factorial_inner(accumulator * input, input - 1, memo)
+            tailcall::call! { factorial_inner(accumulator * input, input - 1, memo) }
         } else {
             accumulator
         }
@@ -45,7 +45,7 @@ where
     I: Iterator<Item = &'a i32>,
 {
     match int_iter.next() {
-        Some(i) => add_iter(int_iter, accum + i),
+        Some(i) => tailcall::call! { add_iter(int_iter, accum + i) },
         None => accum,
     }
 }

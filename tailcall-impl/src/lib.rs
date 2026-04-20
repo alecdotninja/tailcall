@@ -19,7 +19,6 @@ mod helpers;
 mod transforms;
 
 use proc_macro::TokenStream;
-use quote::quote;
 use syn::{parse_macro_input, ItemFn};
 
 /// Transforms a [function definition] so that all recursive calls within the body are
@@ -30,14 +29,14 @@ use syn::{parse_macro_input, ItemFn};
 ///
 /// # Example
 ///
-/// ```
-/// use tailcall_impl::tailcall;
+/// ```ignore
+/// use tailcall::tailcall;
 ///
 /// fn factorial(input: u64) -> u64 {
 ///     #[tailcall]
 ///     fn factorial_inner(accumulator: u64, input: u64) -> u64 {
 ///         if input > 0 {
-///             factorial_inner(accumulator * input, input - 1)
+///             tailcall::call! { factorial_inner(accumulator * input, input - 1) }
 ///         } else {
 ///             accumulator
 ///         }
@@ -49,15 +48,15 @@ use syn::{parse_macro_input, ItemFn};
 ///
 /// # Requirements
 ///
-/// - All recursive calls must be in [tail form]:
+/// - Tail-call sites must be written with [`tailcall::call!`] and left in [tail form]:
 ///
 /// ```compile_fail
-/// use tailcall_impl::tailcall;
+/// use tailcall::tailcall;
 ///   
 /// #[tailcall]
 /// fn factorial(input: u64) -> u64 {
 ///     if input > 0 {
-///         input * factorial(input - 1)
+///         input * tailcall::call! { factorial(input - 1) }
 /// //      ^^^^^^^ This is not allowed.
 ///     } else {
 ///         1
@@ -68,6 +67,8 @@ use syn::{parse_macro_input, ItemFn};
 /// - Methods (functions which bind `self` in the arguments list) are not supported:
 ///
 /// ```compile_fail
+/// use tailcall::tailcall;
+///
 /// trait Factorialable {
 ///     fn factorial(self) -> Self {
 ///         self.calc_factorial(1)
@@ -95,7 +96,10 @@ pub fn tailcall(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
     let input = parse_macro_input!(tokens as ItemFn);
     let output = transforms::apply_fn_tailcall_transform(input);
 
-    TokenStream::from(quote! {
-        #output
-    })
+    TokenStream::from(output)
+}
+
+#[proc_macro]
+pub fn call(tokens: TokenStream) -> TokenStream {
+    TokenStream::from(transforms::expand_call_macro(tokens.into()))
 }

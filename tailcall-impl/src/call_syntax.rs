@@ -39,9 +39,7 @@ pub fn helper_path_from_call(expr_call: &ExprCall) -> Result<Path, Error> {
     }
 }
 
-pub fn helper_method_call_tokens(
-    expr_method_call: &ExprMethodCall,
-) -> Result<TokenStream, Error> {
+pub fn helper_method_call_tokens(expr_method_call: &ExprMethodCall) -> Result<TokenStream, Error> {
     if !matches!(
         &*expr_method_call.receiver,
         Expr::Path(ExprPath { path, .. }) if path.is_ident("self")

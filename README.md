@@ -8,6 +8,8 @@
 
 It provides **explicit, stack-safe tail calls** using a lightweight trampoline runtime, with a macro that keeps usage ergonomic.
 
+If the proposed [`become` keyword](https://internals.rust-lang.org/t/pre-rfc-explicit-proper-tail-calls/3797/16) is ever stabilized, it will likely be the preferred solution for proper tail calls. Until then, `tailcall` provides a practical approach on stable Rust.
+
 ---
 
 ## Installation
@@ -40,6 +42,8 @@ That’s the core API:
 
 * mark the function with `#[tailcall]`
 * wrap recursive tail calls with `tailcall::call!`
+
+This runs in constant stack space, even for very large inputs.
 
 ---
 
@@ -271,15 +275,9 @@ So the macro:
 
 Each deferred closure is stored in a fixed-size inline slot (~48 bytes).
 
-If a closure captures more than that, constructing the `Thunk` will panic at runtime.
-Macro-generated helper thunks are subject to the same limit, so functions with enough arguments or
-captured state can also exceed it.
+**Closures that exceed that size are rejected at compile time.**
 
----
-
-## Notes
-
-This approach mirrors proposed language-level tail calls (e.g. `become`), and provides a practical solution on stable Rust today.
+Macro-generated helper thunks are subject to the same limit, so functions with enough arguments or captured state can also exceed it.
 
 ---
 

@@ -1,6 +1,6 @@
-mod erased_thunk;
+mod erased_fn_once;
 mod slot;
 mod thunk;
 
-pub(crate) use erased_thunk::ErasedThunk;
+use erased_fn_once::ErasedFnOnce;
 pub use thunk::Thunk;

@@ -90,18 +90,17 @@
 
 use core::{any::type_name, fmt};
 
-use super::ErasedThunk;
+use super::ErasedFnOnce;
 
 /// An opaque deferred value in the thunk runtime.
 ///
-/// Values of this type are usually created with [`Thunk::bounce`], [`Thunk::new`], and
-/// [`Thunk::value`] and then consumed by [`Thunk::call`].
-/// Users do not inspect or construct the internal representation directly.
+/// Values of this type are created with [`Thunk::new`], [`Thunk::value`], and
+/// [`Thunk::bounce`], then consumed by [`Thunk::call`].
 pub struct Thunk<'a, T>(ThunkKind<'a, T>);
 
 enum ThunkKind<'a, T> {
     Done(T),
-    Bounce(ErasedThunk<'a, Thunk<'a, T>>),
+    Bounce(ErasedFnOnce<'a, Thunk<'a, T>>),
 }
 
 impl<'a, T> Thunk<'a, T> {
@@ -125,7 +124,7 @@ impl<'a, T> Thunk<'a, T> {
     where
         F: FnOnce() -> Self + 'a,
     {
-        Self(ThunkKind::Bounce(ErasedThunk::new(fn_once)))
+        Self(ThunkKind::Bounce(ErasedFnOnce::new(fn_once)))
     }
 
     /// Resolves the deferred computation to a final value.

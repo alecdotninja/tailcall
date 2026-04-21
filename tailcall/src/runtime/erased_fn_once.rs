@@ -1,6 +1,6 @@
 //! Type-erased `FnOnce` storage for the thunk runtime.
 //!
-//! An [`ErasedThunk`] stores the captured data for a single `FnOnce` in a fixed-size stack slot
+//! An [`ErasedFnOnce`] stores the captured data for a single `FnOnce` in a fixed-size stack slot
 //! together with the function pointers needed to either call it or drop it in place.
 
 use core::{
@@ -13,26 +13,35 @@ use core::{
 
 use super::slot::Slot;
 
+// On 64-bit targets, 48 bytes of inline capture storage is the largest budget that still keeps
+// the full public `Thunk` representation at 64 bytes once the slot's 16-byte alignment and the
+// surrounding function pointers are accounted for.
 const MAX_THUNK_DATA_SIZE: usize = 48;
 
-type ThunkSlot = Slot<MAX_THUNK_DATA_SIZE>;
-type CallFn<T> = fn(ThunkSlot) -> T;
-type DropInPlaceFn = unsafe fn(*mut ThunkSlot);
+type ErasedFnOnceSlot = Slot<MAX_THUNK_DATA_SIZE>;
+type CallFn<T> = fn(ErasedFnOnceSlot) -> T;
+type DropInPlaceFn = unsafe fn(*mut ErasedFnOnceSlot);
 
 #[repr(transparent)]
 /// A type-erased `FnOnce` stored in the runtime's stack slot.
-pub(crate) struct ErasedThunk<'a, T = ()> {
+pub(crate) struct ErasedFnOnce<'a, T = ()> {
     inner: Inner<'a, T>,
 }
 
+/// Owns the full erased `FnOnce` representation.
+///
+/// This inner struct holds the inline capture storage together with the function pointers needed
+/// to either call the erased closure or drop its captures in place. Keeping that state in a single
+/// field lets [`ErasedFnOnce`] move it out during `call()` while still preserving normal drop
+/// semantics when the erased closure is never invoked.
 struct Inner<'a, T> {
-    slot: ThunkSlot,
+    slot: ErasedFnOnceSlot,
     call_impl: CallFn<T>,
     drop_in_place_impl: DropInPlaceFn,
     _marker: PhantomData<dyn FnOnce() -> T + 'a>,
 }
 
-impl<'a, T> ErasedThunk<'a, T> {
+impl<'a, T> ErasedFnOnce<'a, T> {
     /// Creates a new erased thunk from a `FnOnce`.
     ///
     /// The closure's captured state is stored inline in a fixed-size slot. Construction will panic
@@ -72,16 +81,16 @@ impl<'a, T> ErasedThunk<'a, T> {
     }
 }
 
-impl<T> Drop for ErasedThunk<'_, T> {
+impl<T> Drop for ErasedFnOnce<'_, T> {
     fn drop(&mut self) {
         // SAFETY: We own the slot, and it cannot be used after dropping.
         unsafe { (self.inner.drop_in_place_impl)(&mut self.inner.slot) }
     }
 }
 
-impl<T> fmt::Debug for ErasedThunk<'_, T> {
+impl<T> fmt::Debug for ErasedFnOnce<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ErasedThunk -> {}", type_name::<T>())
+        write!(f, "ErasedFnOnce -> {}", type_name::<T>())
     }
 }
 
@@ -89,12 +98,12 @@ impl<T> fmt::Debug for ErasedThunk<'_, T> {
 mod tests {
     extern crate std;
 
-    use super::ErasedThunk;
+    use super::ErasedFnOnce;
     use std::panic::{catch_unwind, AssertUnwindSafe};
 
     #[test]
     fn sanity() {
-        let thunk = ErasedThunk::new(|| 42);
+        let thunk = ErasedFnOnce::new(|| 42);
         assert_eq!(42, thunk.call());
     }
 
@@ -103,7 +112,7 @@ mod tests {
         let x = 1;
         let y = 2;
 
-        let thunk = ErasedThunk::new(move || x + y);
+        let thunk = ErasedFnOnce::new(move || x + y);
 
         assert_eq!(3, thunk.call());
     }
@@ -120,7 +129,7 @@ mod tests {
         let g: u64 = 7;
         let h: u64 = 8;
 
-        let _ = ErasedThunk::new(move || a + b + c + d + e + f + g + h);
+        let _ = ErasedFnOnce::new(move || a + b + c + d + e + f + g + h);
     }
 
     #[test]
@@ -129,7 +138,7 @@ mod tests {
         let tracker = DropTracker {
             drops: std::rc::Rc::clone(&drops),
         };
-        let thunk = ErasedThunk::new(move || {
+        let thunk = ErasedFnOnce::new(move || {
             let _tracker = tracker;
         });
 
@@ -144,7 +153,7 @@ mod tests {
         let tracker = DropTracker {
             drops: std::rc::Rc::clone(&drops),
         };
-        let thunk = ErasedThunk::new(move || {
+        let thunk = ErasedFnOnce::new(move || {
             let _tracker = tracker;
         });
 
@@ -159,7 +168,7 @@ mod tests {
         let tracker = DropTracker {
             drops: std::rc::Rc::clone(&drops),
         };
-        let thunk = ErasedThunk::new(move || {
+        let thunk = ErasedFnOnce::new(move || {
             let _tracker = tracker;
             panic!("boom");
         });

@@ -8,7 +8,7 @@
 
 It provides **explicit, stack-safe tail calls** using a lightweight trampoline runtime, with a macro that keeps usage ergonomic.
 
-If the proposed [`become` keyword](https://internals.rust-lang.org/t/pre-rfc-explicit-proper-tail-calls/3797/16) is ever stabilized, it will likely be the preferred solution for proper tail calls. Until then, `tailcall` provides a practical approach on stable Rust.
+If the proposed [`become` keyword](https://internals.rust-lang.org/t/pre-rfc-explicit-proper-tail-calls/3797/16) is ever stabilized, it will likely be the preferred solution for proper tail calls.
 
 ---
 
@@ -60,6 +60,19 @@ It may not be ideal when:
 
 * a simple loop is clearer
 * you need maximum performance (there is some trampoline overhead)
+
+---
+
+## Cost
+
+`tailcall` avoids heap allocation.
+
+That is an important difference from some other stack-safe recursion libraries with a similar
+interface, which build the recursive state machine on the heap.
+
+The main runtime cost here is an indirect call at each `Thunk::bounce` step. In favorable cases,
+the optimizer may be able to devirtualize that call, but you should still think of the trampoline
+as paying for an extra dispatch per bounced step.
 
 ---
 

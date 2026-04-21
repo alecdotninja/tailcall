@@ -264,12 +264,33 @@ So the macro:
 
 ## Limitations
 
-* Tail calls must use `tailcall::call!`
-* Only simple argument patterns are supported
-* `?` is not supported inside `#[tailcall]` functions (use `match`)
-* Trait methods are not supported
-* `async fn` and `const fn` are not supported
-* Only `tailcall::call!` sites are stack-safe in mixed recursion
+### Explicit Tail Calls
+
+Tail-recursive transitions must be written with `tailcall::call!`.
+
+Plain recursive calls are left alone, which means they still use the native Rust call stack.
+
+### Simple Argument Patterns
+
+`#[tailcall]` currently only supports simple identifier arguments.
+
+Patterns in function parameters are not rewritten by the macro.
+
+### `?` Is Not Supported
+
+The `?` operator is not supported inside `#[tailcall]` functions on stable Rust.
+
+Use `match` or explicit early returns instead.
+
+### Trait Methods
+
+Methods in ordinary `impl` blocks are supported.
+
+Trait methods are not supported.
+
+### `async fn` and `const fn`
+
+`#[tailcall]` does not support `async fn` or `const fn`.
 
 ### Closure Size Limit
 
@@ -283,11 +304,54 @@ Macro-generated helper thunks are subject to the same limit, so functions with e
 
 ## Development
 
+For normal development, the main local checks are:
+
 ```bash
 cargo test
+cargo test --doc
 cargo +nightly miri test --all
-cargo fmt --all
+cargo fmt --all -- --check
 cargo clippy --all
+cargo doc --no-deps
+```
+
+If you are changing the public docs or runtime internals, it is also worth doing a quick end-to-end smoke test from a fresh crate that depends on the published version from crates.io.
+
+---
+
+## Publishing
+
+`tailcall` and `tailcall-impl` are released together.
+
+1. Update the shared workspace version in `Cargo.toml`.
+   Also update the matching `tailcall` and `tailcall-impl` entries in `[workspace.dependencies]`.
+2. Run the release checks:
+
+```bash
+cargo test
+cargo test --doc
+cargo doc --no-deps
+```
+
+3. Commit the release version bump.
+4. Publish `tailcall-impl` first:
+
+```bash
+cargo publish -p tailcall-impl
+```
+
+5. Publish `tailcall` after the proc-macro crate is available:
+
+```bash
+cargo publish -p tailcall
+```
+
+6. Tag the release from `main` and push the commit and tag:
+
+```bash
+git tag vX.Y.Z
+git push origin main
+git push origin vX.Y.Z
 ```
 
 ---

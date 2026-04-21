@@ -33,9 +33,13 @@ use syn::{parse_macro_input, ImplItemMethod, ItemFn};
 /// [function definition]: https://docs.rs/syn/1.0.9/syn/struct.ItemFn.html
 /// [tail recursion]: https://en.wikipedia.org/wiki/Tail_call
 ///
-/// For simple free functions that only tail-call themselves directly, the macro lowers the
-/// function into an inline `loop`. More complex cases keep the hidden thunk-builder shape and run
-/// through `tailcall::runtime::Thunk`.
+/// For simple free functions and inherent methods that only tail-call themselves directly, the
+/// macro lowers the item into an inline `loop`. More complex cases keep the hidden
+/// thunk-builder shape and run through `tailcall::runtime::Thunk`.
+///
+/// For methods, the optimized path aliases the receiver once, reuses the non-receiver arguments
+/// as mutable loop state, and rewrites each direct self tail call into "compute the next
+/// arguments, assign them, and continue".
 ///
 /// # Example
 ///

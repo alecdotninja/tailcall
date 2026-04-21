@@ -3,8 +3,8 @@ use quote::quote;
 use syn::{Error, ImplItemMethod, ItemFn, Signature};
 
 use crate::{
-    analyze::is_simple_self_tail_recursive,
-    loop_lower::lower_self_tail_loop,
+    analyze::{is_simple_self_tail_recursive, is_simple_self_tail_recursive_method},
+    loop_lower::{lower_self_tail_loop, lower_self_tail_method_loop},
     rewrite::TailPositionRewriter,
     signature::{function_argument_exprs, helper_signature, method_helper_signature},
 };
@@ -50,19 +50,42 @@ impl TailcallMethodTransform {
         let helper_sig = method_helper_signature(&sig)?;
         let helper_fn_ident = &helper_sig.ident;
         let helper_args = function_argument_exprs(&sig)?;
-        let helper_block = TailPositionRewriter::rewrite(block)?;
+        let original_method = ImplItemMethod {
+            attrs: attrs.clone(),
+            vis: vis.clone(),
+            defaultness: defaultness.clone(),
+            sig: sig.clone(),
+            block: block.clone(),
+        };
+        let optimized = is_simple_self_tail_recursive_method(&original_method);
+        let wrapper_body = if optimized {
+            lower_self_tail_method_loop(&original_method)?
+        } else {
+            quote! { Self::#helper_fn_ident(#(#helper_args),*).call() }
+        };
+        let helper_body = if optimized {
+            let method_ident = &sig.ident;
+            quote! {
+                tailcall::runtime::Thunk::value(Self::#method_ident(#(#helper_args),*))
+            }
+        } else {
+            let helper_block = TailPositionRewriter::rewrite(block)?;
+            quote! {
+                tailcall::runtime::Thunk::bounce(move || #helper_block)
+            }
+        };
 
         Ok(quote! {
             #(#attrs)*
             #defaultness #vis #sig {
-                Self::#helper_fn_ident(#(#helper_args),*).call()
+                #wrapper_body
             }
 
             #[doc(hidden)]
             #[allow(unused)]
             #[inline(always)]
             #helper_sig {
-                tailcall::runtime::Thunk::bounce(move || #helper_block)
+                #helper_body
             }
         })
     }

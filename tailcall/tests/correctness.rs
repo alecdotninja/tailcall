@@ -250,6 +250,15 @@ fn test_mutable_receiver_methods_work_with_tailcall() {
     assert_eq!(accumulator.steps, 9);
 }
 
+#[test]
+fn test_self_recursive_methods_keep_hidden_thunk_builder() {
+    let mut accumulator = MethodAccumulator::default();
+    let total = accumulator.__tailcall_build_tick_down_thunk(8).call();
+
+    assert_eq!(total, 9);
+    assert_eq!(accumulator.steps, 9);
+}
+
 #[cfg(not(miri))]
 #[tailcall]
 fn recurse_with_metadata(n: u64) -> u64 {

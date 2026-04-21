@@ -157,10 +157,14 @@
 //! In practice, most users should stop here. The macro handles the trampoline machinery and lets
 //! you write recursive code directly, with [`call!`] marking the tail-recursive transitions.
 //!
-//! When a `#[tailcall]` function only tail-calls itself directly, the macro can lower it to an
-//! inline `loop`, which removes the trampoline overhead entirely. More complex cases, such as
-//! mutual recursion or functions that need the full hidden builder shape, still use the
-//! [`Thunk`]-based runtime.
+//! When a `#[tailcall]` free function or inherent method only tail-calls itself directly, the
+//! macro can lower it to an inline `loop`, which removes the trampoline overhead entirely. More
+//! complex cases, such as mutual recursion or functions that need the full hidden builder shape,
+//! still use the [`Thunk`]-based runtime.
+//!
+//! For methods, the optimized path works by aliasing the receiver once, rebinding the
+//! non-receiver arguments as mutable loop state, and turning each direct self tail call into
+//! "compute next arguments, assign them, and `continue`".
 //!
 //! ## Manual `Thunk`
 //!

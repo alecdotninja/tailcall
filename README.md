@@ -74,8 +74,8 @@ interface, but it introduces allocation and indirection on every recursive step.
 
 * an extra indirect call per `Thunk::bounce` step
 
-In some cases, that cost disappears entirely. If a simple free function only tail-calls itself
-directly, `#[tailcall]` can lower it to an inline `loop`.
+In some cases, that cost disappears entirely. If a simple free function or inherent method only
+tail-calls itself directly, `#[tailcall]` can lower it to an inline `loop`.
 
 ---
 
@@ -134,8 +134,13 @@ This turns recursion into iteration under the hood.
 
 Most users only need the macro.
 
-For simple direct self-recursion, the macro can compile to an inline loop. Mutual recursion and
-other more complex cases continue to use the hidden `Thunk` builder automatically.
+For simple direct self-recursion, the macro can compile free functions and inherent methods to an
+inline loop. Mutual recursion and other more complex cases continue to use the hidden `Thunk`
+builder automatically.
+
+For methods, that optimized path works by aliasing the receiver once, rebinding the
+non-receiver arguments as loop state, and turning each direct self tail call into "assign the
+next arguments, then continue the loop".
 
 ### Basic Pattern
 

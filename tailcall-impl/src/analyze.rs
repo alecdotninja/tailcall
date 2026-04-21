@@ -1,14 +1,19 @@
 use syn::{
     parse2,
     visit::{self, Visit},
-    Expr, ExprCall, ExprMacro, ExprPath, FnArg, Ident, ItemFn, ItemMacro, Pat, PatIdent, PatType,
-    Path, ReturnType, Type,
+    Expr, ExprCall, ExprMacro, ExprMethodCall, ExprPath, FnArg, Ident, ImplItemMethod, ItemFn,
+    ItemMacro, Pat, PatIdent, PatType, Path, ReturnType, Type,
 };
 
 use crate::call_syntax::is_tailcall_macro;
 
 pub fn is_simple_self_tail_recursive(item_fn: &ItemFn) -> bool {
     let (eligible, saw_self_tailcall) = analyze(item_fn);
+    eligible && saw_self_tailcall
+}
+
+pub fn is_simple_self_tail_recursive_method(method: &ImplItemMethod) -> bool {
+    let (eligible, saw_self_tailcall) = analyze_method(method);
     eligible && saw_self_tailcall
 }
 
@@ -23,11 +28,30 @@ fn analyze(item_fn: &ItemFn) -> (bool, bool) {
 
     let mut analyzer = SelfTailAnalyzer {
         fn_ident: &item_fn.sig.ident,
-        arg_idents: function_arg_idents(item_fn),
+        arg_idents: function_arg_idents(&item_fn.sig.inputs),
         eligible: true,
         saw_self_tailcall: false,
     };
     analyzer.visit_block(&item_fn.block);
+    (analyzer.eligible, analyzer.saw_self_tailcall)
+}
+
+fn analyze_method(method: &ImplItemMethod) -> (bool, bool) {
+    if !method.sig.generics.params.is_empty() || method.sig.generics.where_clause.is_some() {
+        return (false, false);
+    }
+
+    if returns_result(&method.sig.output) {
+        return (false, false);
+    }
+
+    let mut analyzer = SelfTailMethodAnalyzer {
+        method_ident: &method.sig.ident,
+        arg_idents: function_arg_idents(&method.sig.inputs),
+        eligible: true,
+        saw_self_tailcall: false,
+    };
+    analyzer.visit_block(&method.block);
     (analyzer.eligible, analyzer.saw_self_tailcall)
 }
 
@@ -52,6 +76,13 @@ struct SelfTailAnalyzer<'a> {
     saw_self_tailcall: bool,
 }
 
+struct SelfTailMethodAnalyzer<'a> {
+    method_ident: &'a Ident,
+    arg_idents: Vec<Ident>,
+    eligible: bool,
+    saw_self_tailcall: bool,
+}
+
 impl SelfTailAnalyzer<'_> {
     fn is_self_path(&self, path: &Path) -> bool {
         path.is_ident(self.fn_ident)
@@ -62,10 +93,20 @@ impl SelfTailAnalyzer<'_> {
     }
 }
 
-fn function_arg_idents(item_fn: &ItemFn) -> Vec<Ident> {
-    item_fn
-        .sig
-        .inputs
+impl SelfTailMethodAnalyzer<'_> {
+    fn is_self_receiver(&self, expr: &Expr) -> bool {
+        matches!(expr, Expr::Path(ExprPath { path, .. }) if path.is_ident("self"))
+    }
+
+    fn is_argument_ident(&self, ident: &Ident) -> bool {
+        self.arg_idents.iter().any(|arg_ident| arg_ident == ident)
+    }
+}
+
+fn function_arg_idents(
+    inputs: &syn::punctuated::Punctuated<FnArg, syn::token::Comma>,
+) -> Vec<Ident> {
+    inputs
         .iter()
         .filter_map(|fn_arg| match fn_arg {
             FnArg::Receiver(_) => None,
@@ -153,11 +194,89 @@ impl<'ast> Visit<'ast> for SelfTailAnalyzer<'_> {
     fn visit_item_fn(&mut self, _item_fn: &'ast ItemFn) {}
 }
 
+impl<'ast> Visit<'ast> for SelfTailMethodAnalyzer<'_> {
+    fn visit_pat_ident(&mut self, pat_ident: &'ast PatIdent) {
+        if !self.eligible {
+            return;
+        }
+
+        if self.is_argument_ident(&pat_ident.ident) {
+            self.eligible = false;
+            return;
+        }
+
+        visit::visit_pat_ident(self, pat_ident);
+    }
+
+    fn visit_item_macro(&mut self, item_macro: &'ast ItemMacro) {
+        if !self.eligible {
+            return;
+        }
+
+        if is_tailcall_macro(&item_macro.mac.path) {
+            match parse2::<ExprMethodCall>(item_macro.mac.tokens.clone()) {
+                Ok(expr_method_call)
+                    if self.is_self_receiver(&expr_method_call.receiver)
+                        && expr_method_call.method == *self.method_ident =>
+                {
+                    self.saw_self_tailcall = true;
+                }
+                Ok(_) | Err(_) => self.eligible = false,
+            }
+            return;
+        }
+
+        visit::visit_item_macro(self, item_macro);
+    }
+
+    fn visit_expr_macro(&mut self, expr_macro: &'ast ExprMacro) {
+        if !self.eligible {
+            return;
+        }
+
+        if is_tailcall_macro(&expr_macro.mac.path) {
+            match parse2::<ExprMethodCall>(expr_macro.mac.tokens.clone()) {
+                Ok(expr_method_call)
+                    if self.is_self_receiver(&expr_method_call.receiver)
+                        && expr_method_call.method == *self.method_ident =>
+                {
+                    self.saw_self_tailcall = true;
+                }
+                Ok(_) | Err(_) => self.eligible = false,
+            }
+            return;
+        }
+
+        visit::visit_expr_macro(self, expr_macro);
+    }
+
+    fn visit_expr_method_call(&mut self, expr_method_call: &'ast ExprMethodCall) {
+        if !self.eligible {
+            return;
+        }
+
+        if self.is_self_receiver(&expr_method_call.receiver)
+            && expr_method_call.method == *self.method_ident
+        {
+            self.eligible = false;
+            return;
+        }
+
+        visit::visit_expr_method_call(self, expr_method_call);
+    }
+
+    fn visit_expr_closure(&mut self, _expr_closure: &'ast syn::ExprClosure) {}
+
+    fn visit_item_fn(&mut self, _item_fn: &'ast ItemFn) {}
+}
+
 #[cfg(test)]
 mod tests {
     use syn::parse_quote;
 
-    use super::{analyze, is_simple_self_tail_recursive};
+    use super::{
+        analyze, analyze_method, is_simple_self_tail_recursive, is_simple_self_tail_recursive_method,
+    };
     use crate::call_syntax::is_tailcall_macro;
 
     #[test]
@@ -245,5 +364,34 @@ mod tests {
         };
 
         assert!(is_tailcall_macro(&item_macro.mac.path));
+    }
+
+    #[test]
+    fn accepts_simple_self_tail_recursive_method() {
+        let method: syn::ImplItemMethod = parse_quote! {
+            fn countdown(&self, n: u32) -> u32 {
+                if n > 0 {
+                    tailcall::call! { self.countdown(n - 1) }
+                } else {
+                    0
+                }
+            }
+        };
+
+        assert_eq!(analyze_method(&method), (true, true));
+        assert!(is_simple_self_tail_recursive_method(&method));
+    }
+
+    #[test]
+    fn rejects_shadowing_parameter_bindings_in_methods() {
+        let method: syn::ImplItemMethod = parse_quote! {
+            fn countdown(&self, input: u32) -> u32 {
+                let input = input - 1;
+                tailcall::call! { self.countdown(input) }
+            }
+        };
+
+        assert_eq!(analyze_method(&method), (false, false));
+        assert!(!is_simple_self_tail_recursive_method(&method));
     }
 }

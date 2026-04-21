@@ -132,7 +132,7 @@ fn is_odd_rec_thunk(x: u128) -> bool {
 }
 
 #[tailcall]
-fn is_odd_rec_res_go(x: u128, odd: Result<bool, ()>) -> Result<bool, ()> {
+fn is_odd_rec_res_go(x: u64, odd: Result<bool, ()>) -> Result<bool, ()> {
     if x > 0 {
         match odd {
             Ok(odd) => tailcall::call! { is_odd_rec_res_go(x - 1, Ok(!odd)) },
@@ -143,7 +143,7 @@ fn is_odd_rec_res_go(x: u128, odd: Result<bool, ()>) -> Result<bool, ()> {
     }
 }
 
-fn is_odd_res_rec(x: u128) -> bool {
+fn is_odd_res_rec(x: u64) -> bool {
     is_odd_rec_res_go(x, Ok(false)).unwrap()
 }
 
@@ -230,7 +230,7 @@ fn bench_oddness_tailcall_thunk_builder(b: &mut Bencher) {
 }
 
 fn bench_oddness_res_rec(b: &mut Bencher) {
-    let mut val: u128 = ODD_TEST_NUM;
+    let mut val: u64 = ODD_TEST_NUM as u64;
     b.iter(|| {
         black_box(is_odd_res_rec(black_box(val)));
         val += 1;

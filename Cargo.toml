@@ -19,8 +19,8 @@ edition = "2018"
 # ⚠️ Warning! When updating the version here, you must also update the version
 # in the `workspace.dependencies` section of this file for the `tailcall` and
 # `tailcall-impl` crates.
-version = "2.0.2"
+version = "2.0.3"
 
 [workspace.dependencies]
-tailcall = { path = "tailcall", version = "2.0.2" }
-tailcall-impl = { path = "tailcall-impl", version = "2.0.2" }
+tailcall = { path = "tailcall", version = "2.0.3" }
+tailcall-impl = { path = "tailcall-impl", version = "2.0.3" }

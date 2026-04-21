@@ -65,7 +65,7 @@ mod tests {
     use super::Slot;
 
     #[repr(align(32))]
-    struct OverAligned(u8);
+    struct OverAligned;
 
     #[test]
     fn round_trips_stored_value() {
@@ -93,6 +93,6 @@ mod tests {
     #[test]
     #[should_panic(expected = "unsupported value alignment")]
     fn rejects_values_with_unsupported_alignment() {
-        let _ = Slot::<32>::new(OverAligned(0));
+        let _ = Slot::<32>::new(OverAligned);
     }
 }

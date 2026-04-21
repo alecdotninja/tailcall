@@ -12,18 +12,15 @@ union SlotView<T, const SIZE: usize> {
 }
 
 impl<const SIZE: usize> Slot<SIZE> {
-    // `Slot<SIZE>` can store any `T` that fits within the slot's full layout, including any tail
-    // padding introduced by the alignment on `Slot` itself.
+    // `Slot<SIZE>` can store any `T` that fits within the declared byte capacity. Any tail
+    // padding introduced by the alignment on `Slot` itself is not treated as usable storage.
     pub(crate) const fn new<T>(value: T) -> Self {
         assert!(
             align_of::<T>() <= align_of::<Self>(),
             "unsupported value alignment",
         );
 
-        assert!(
-            size_of::<T>() <= size_of::<Self>(),
-            "value size exceeds slot capacity",
-        );
+        assert!(size_of::<T>() <= SIZE, "value size exceeds slot capacity");
 
         SlotView::of_value(value).into_slot()
     }
@@ -63,6 +60,7 @@ mod tests {
     extern crate std;
 
     use super::Slot;
+    use core::mem::size_of;
 
     #[repr(align(32))]
     struct OverAligned;
@@ -76,9 +74,16 @@ mod tests {
     }
 
     #[test]
-    fn can_use_tail_padding_in_slot_layout() {
+    fn slot_layout_includes_alignment_padding() {
+        assert_eq!(size_of::<Slot<1>>(), 16);
+        assert_eq!(size_of::<Slot<16>>(), 16);
+        assert_eq!(size_of::<Slot<17>>(), 32);
+    }
+
+    #[test]
+    fn round_trips_value_up_to_declared_capacity() {
         let value = [7_u8; 16];
-        let slot = Slot::<1>::new(value);
+        let slot = Slot::<16>::new(value);
         let round_trip = unsafe { slot.into_value::<[u8; 16]>() };
 
         assert_eq!(round_trip, value);

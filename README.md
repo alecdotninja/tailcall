@@ -8,6 +8,8 @@
 
 It provides **explicit, stack-safe tail calls** using a lightweight trampoline runtime, with a macro that keeps usage ergonomic.
 
+The runtime crate is `no_std`, so it can be used on targets without the standard library.
+
 If the proposed [`become` keyword](https://internals.rust-lang.org/t/pre-rfc-explicit-proper-tail-calls/3797/16) is ever stabilized, it will likely be the preferred solution for proper tail calls.
 
 ---

@@ -4,7 +4,7 @@
 //!
 //! - the [`tailcall`] attribute macro, which rewrites a function to execute through the
 //!   trampoline runtime
-//! - the low-level runtime type, exposed as [`Thunk`]
+//! - the low-level runtime, exposed as [`runtime`] and re-exported at the crate root as [`Thunk`]
 //!
 //! The macro-based API is explicit at recursive call sites. Any tail call that should be executed
 //! through the trampoline must use [`call!`]:
@@ -167,7 +167,8 @@
 //!
 //! ## Manual `Thunk`
 //!
-//! If you need direct control over the runtime, the low-level API is [`Thunk`].
+//! If you need direct control over the runtime, the low-level API is [`runtime::Thunk`]. It is
+//! also re-exported at the crate root as [`Thunk`].
 //! A [`Thunk`] is a fixed-size deferred value from a computation, which means it can live on the
 //! stack. It may hold either the value directly or a type-erased closure that will eventually
 //! produce the value.
@@ -184,7 +185,7 @@
 //! A manual runtime implementation usually looks like this:
 //!
 //! ```rust
-//! use tailcall::Thunk;
+//! use tailcall::runtime::Thunk;
 //!
 //! fn is_even(x: u128) -> bool {
 //!     __tailcall_build_is_even_thunk(x).call()
@@ -217,7 +218,7 @@
 //! resolves to a final value:
 //!
 //! ```rust
-//! use tailcall::Thunk;
+//! use tailcall::runtime::Thunk;
 //!
 //! fn answer() -> i32 {
 //!     Thunk::new(|| 42).call()
@@ -230,7 +231,7 @@
 //! the deferred closure:
 //!
 //! ```rust
-//! use tailcall::Thunk;
+//! use tailcall::runtime::Thunk;
 //!
 //! fn sum_csv(input: &str) -> u64 {
 //!     __tailcall_build_skip_separators_thunk(input.as_bytes(), 0).call()
@@ -289,10 +290,10 @@
 //!     __tailcall_build_gcd_thunk(a, b).call()
 //! }
 //!
-//! fn __tailcall_build_gcd_thunk<'tailcall>(a: u64, b: u64) -> tailcall::Thunk<'tailcall, u64> {
-//!     tailcall::Thunk::bounce(move || {
+//! fn __tailcall_build_gcd_thunk<'tailcall>(a: u64, b: u64) -> tailcall::runtime::Thunk<'tailcall, u64> {
+//!     tailcall::runtime::Thunk::bounce(move || {
 //!         if b == 0 {
-//!             tailcall::Thunk::value(a)
+//!             tailcall::runtime::Thunk::value(a)
 //!         } else {
 //!             __tailcall_build_gcd_thunk(b, a % b)
 //!         }
@@ -330,4 +331,4 @@
 pub use runtime::Thunk;
 pub use tailcall_impl::{call, tailcall};
 
-mod runtime;
+pub mod runtime;

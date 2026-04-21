@@ -24,7 +24,8 @@ pub fn helper_signature(sig: &Signature) -> Signature {
         .params
         .push(parse_quote!(#tailcall_lifetime));
     rewrite_elided_lifetimes_in_inputs(&mut helper_sig.inputs, &tailcall_lifetime);
-    helper_sig.output = parse_quote! { -> tailcall::Thunk<#tailcall_lifetime, #output_ty> };
+    helper_sig.output =
+        parse_quote! { -> tailcall::runtime::Thunk<#tailcall_lifetime, #output_ty> };
 
     let where_clause = helper_sig.generics.make_where_clause();
     for generic_param in &sig.generics.params {
@@ -59,7 +60,8 @@ pub fn method_helper_signature(sig: &Signature) -> Result<Signature, Error> {
         .params
         .push(parse_quote!(#tailcall_lifetime));
     rewrite_method_inputs(&mut helper_sig.inputs, &tailcall_lifetime)?;
-    helper_sig.output = parse_quote! { -> tailcall::Thunk<#tailcall_lifetime, #output_ty> };
+    helper_sig.output =
+        parse_quote! { -> tailcall::runtime::Thunk<#tailcall_lifetime, #output_ty> };
 
     let where_clause = helper_sig.generics.make_where_clause();
     for generic_param in &sig.generics.params {

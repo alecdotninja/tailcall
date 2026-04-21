@@ -94,7 +94,7 @@ impl TailPositionRewriter {
             }
             expr => {
                 let expr = self.fold_expr(expr);
-                parse_quote! { tailcall::Thunk::value(#expr) }
+                parse_quote! { tailcall::runtime::Thunk::value(#expr) }
             }
         }
     }

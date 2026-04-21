@@ -59,7 +59,7 @@ impl TailcallMethodTransform {
             #[doc(hidden)]
             #[inline(always)]
             #helper_sig {
-                tailcall::Thunk::bounce(move || #helper_block)
+                tailcall::runtime::Thunk::bounce(move || #helper_block)
             }
         })
     }
@@ -94,7 +94,7 @@ impl TailcallTransform {
             #[doc(hidden)]
             #[inline(always)]
             #helper_sig {
-                tailcall::Thunk::bounce(move || #helper_block)
+                tailcall::runtime::Thunk::bounce(move || #helper_block)
             }
         })
     }

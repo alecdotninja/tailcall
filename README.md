@@ -218,10 +218,11 @@ fn factorial(n: u64) -> u64 {
 
 ## Using the Runtime Directly
 
-The macro is just a thin layer over `Thunk`.
+The macro is just a thin layer over `runtime::Thunk`.
 
-A `Thunk<T>` is a fixed-size deferred value from a computation, so it can live on the stack. It
-may contain the value directly or a type-erased closure that will eventually produce the value.
+A `runtime::Thunk<T>` is a fixed-size deferred value from a computation, so it can live on the
+stack. It may contain the value directly or a type-erased closure that will eventually produce the
+value.
 
 You build a chain of steps, then execute it with `.call()`.
 
@@ -236,7 +237,7 @@ You build a chain of steps, then execute it with `.call()`.
 ### Example
 
 ```rust
-use tailcall::Thunk;
+use tailcall::runtime::Thunk;
 
 fn count_down(n: u64) -> u64 {
     build(n).call()

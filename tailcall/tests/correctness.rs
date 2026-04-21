@@ -143,34 +143,26 @@ fn test_tailcall_with_nested_match_and_mutable_state() {
     assert_eq!(trace, vec![(48, 18), (18, 12), (12, 6), (6, 0)]);
 }
 
-fn sum_csv_numbers(input: &str) -> u64 {
+fn skip_leading_separators(input: &str) -> usize {
     #[tailcall]
-    fn sum_csv_numbers_inner(rest: &[u8], total: u64, current: u64) -> u64 {
+    fn skip_leading_separators_inner(rest: &[u8]) -> usize {
         match rest {
-            [digit @ b'0'..=b'9', tail @ ..] => {
-                let current = current * 10 + u64::from(digit - b'0');
-                tailcall::call! { sum_csv_numbers_inner(tail, total, current) }
-            }
             [b' ' | b',', tail @ ..] => {
-                let total = total + current;
-                tailcall::call! { sum_csv_numbers_inner(tail, total, 0) }
+                tailcall::call! { skip_leading_separators_inner(tail) }
             }
-            [_other, tail @ ..] => {
-                tailcall::call! { sum_csv_numbers_inner(tail, total, current) }
-            }
-            [] => total + current,
+            _ => rest.len(),
         }
     }
 
-    sum_csv_numbers_inner(input.as_bytes(), 0, 0)
+    skip_leading_separators_inner(input.as_bytes())
 }
 
 #[test]
 fn test_tailcall_over_borrowed_input_with_state_machine_logic() {
-    assert_eq!(sum_csv_numbers("10, 20,3"), 33);
-    assert_eq!(sum_csv_numbers("7  , 8,   9"), 24);
-    assert_eq!(sum_csv_numbers("5, x, 11"), 16);
-    assert_eq!(sum_csv_numbers(""), 0);
+    assert_eq!(skip_leading_separators("10, 20,3"), 8);
+    assert_eq!(skip_leading_separators("  ,  abc"), 3);
+    assert_eq!(skip_leading_separators(","), 0);
+    assert_eq!(skip_leading_separators(""), 0);
 }
 
 #[tailcall]
@@ -203,7 +195,7 @@ struct MethodParity;
 
 impl MethodParity {
     #[tailcall]
-    fn is_even(&self, x: u128) -> bool {
+    fn is_even(&self, x: u32) -> bool {
         if x == 0 {
             true
         } else {
@@ -212,7 +204,7 @@ impl MethodParity {
     }
 
     #[tailcall]
-    fn is_odd(&self, x: u128) -> bool {
+    fn is_odd(&self, x: u32) -> bool {
         if x == 0 {
             false
         } else {
@@ -238,22 +230,13 @@ struct MethodAccumulator {
 
 impl MethodAccumulator {
     #[tailcall]
-    fn sum_csv(&mut self, rest: &[u8], total: u64, current: u64) -> u64 {
+    fn tick_down(&mut self, remaining: u32) -> u32 {
         self.steps += 1;
 
-        match rest {
-            [digit @ b'0'..=b'9', tail @ ..] => {
-                let current = current * 10 + u64::from(digit - b'0');
-                tailcall::call! { self.sum_csv(tail, total, current) }
-            }
-            [b' ' | b',', tail @ ..] => {
-                let total = total + current;
-                tailcall::call! { self.sum_csv(tail, total, 0) }
-            }
-            [] => total + current,
-            [_other, tail @ ..] => {
-                tailcall::call! { self.sum_csv(tail, total, current) }
-            }
+        if remaining == 0 {
+            self.steps as u32
+        } else {
+            tailcall::call! { self.tick_down(remaining - 1) }
         }
     }
 }
@@ -261,10 +244,10 @@ impl MethodAccumulator {
 #[test]
 fn test_mutable_receiver_methods_work_with_tailcall() {
     let mut accumulator = MethodAccumulator::default();
-    let total = accumulator.sum_csv(b"10, 20, 3", 0, 0);
+    let total = accumulator.tick_down(8);
 
-    assert_eq!(total, 33);
-    assert!(accumulator.steps > 0);
+    assert_eq!(total, 9);
+    assert_eq!(accumulator.steps, 9);
 }
 
 #[cfg(not(miri))]

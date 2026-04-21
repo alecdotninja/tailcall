@@ -3,23 +3,15 @@ use tailcall::*;
 /// Factorial artificial wrapped in a Option
 fn factorial(input: u64) -> Option<u64> {
     #[tailcall]
-    fn factorial_inner(accumulator: Option<u64>, input: Option<u64>) -> Option<u64> {
-        let inp = match input {
-            Some(input) => input,
-            None => return None,
-        };
-        let acc = match accumulator {
-            Some(accumulator) => accumulator,
-            None => return None,
-        };
-        if inp > 0 {
-            tailcall::call! { factorial_inner(Some(acc * inp), Some(inp - 1)) }
+    fn factorial_inner(accumulator: u64, input: u64) -> Option<u64> {
+        if input > 0 {
+            tailcall::call! { factorial_inner(accumulator * input, input - 1) }
         } else {
-            Some(acc)
+            Some(accumulator)
         }
     }
 
-    factorial_inner(Some(1), Some(input))
+    factorial_inner(1, input)
 }
 
 #[tailcall]

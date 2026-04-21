@@ -7,6 +7,13 @@
 //! A [`Thunk`] may hold either the value directly or a type-erased closure that will eventually
 //! produce the value.
 //!
+//! On 64-bit targets, the current runtime keeps [`Thunk`] at 32 bytes. It does that by storing
+//! deferred closures in a small inline slot, so large captures are rejected by panicking when the
+//! [`Thunk`] is constructed.
+//!
+//! Pending [`Thunk`] values still preserve normal destructor-on-drop behavior for anything they
+//! capture.
+//!
 //! You can construct one in three ways:
 //!
 //! - [`Thunk::value`] wraps a value directly
@@ -56,29 +63,18 @@
 //! ```rust
 //! use tailcall::runtime::Thunk;
 //!
-//! fn sum_csv(input: &str) -> u64 {
-//!     build_skip_separators(input.as_bytes(), 0).call()
+//! fn skip_leading_separators(input: &str) -> usize {
+//!     build_skip_separators(input.as_bytes()).call()
 //! }
 //!
-//! fn build_skip_separators(rest: &[u8], total: u64) -> Thunk<'_, u64> {
+//! fn build_skip_separators(rest: &[u8]) -> Thunk<'_, usize> {
 //!     Thunk::bounce(move || match rest {
-//!         [b' ' | b',', tail @ ..] => build_skip_separators(tail, total),
-//!         [] => Thunk::value(total),
-//!         _ => build_read_number(rest, total, 0),
+//!         [b' ' | b',', tail @ ..] => build_skip_separators(tail),
+//!         _ => Thunk::value(rest.len()),
 //!     })
 //! }
 //!
-//! fn build_read_number(rest: &[u8], total: u64, current: u64) -> Thunk<'_, u64> {
-//!     Thunk::bounce(move || match rest {
-//!         [digit @ b'0'..=b'9', tail @ ..] => {
-//!             let current = current * 10 + u64::from(digit - b'0');
-//!             build_read_number(tail, total, current)
-//!         }
-//!         _ => build_skip_separators(rest, total + current),
-//!     })
-//! }
-//!
-//! assert_eq!(sum_csv("10, 20, 3"), 33);
+//! assert_eq!(skip_leading_separators("  ,abc"), 3);
 //! ```
 
 mod erased_fn_once;

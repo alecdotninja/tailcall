@@ -30,24 +30,16 @@
 //! use tailcall::tailcall;
 //!
 //! #[tailcall]
-//! fn sum_csv_numbers(rest: &[u8], total: u64, current: u64) -> u64 {
+//! fn skip_leading_separators(rest: &[u8]) -> usize {
 //!     match rest {
-//!         [digit @ b'0'..=b'9', tail @ ..] => {
-//!             let current = current * 10 + u64::from(digit - b'0');
-//!             tailcall::call! { sum_csv_numbers(tail, total, current) }
-//!         }
 //!         [b' ' | b',', tail @ ..] => {
-//!             let total = total + current;
-//!             tailcall::call! { sum_csv_numbers(tail, total, 0) }
+//!             tailcall::call! { skip_leading_separators(tail) }
 //!         }
-//!         [] => total + current,
-//!         [_other, tail @ ..] => {
-//!             tailcall::call! { sum_csv_numbers(tail, total, current) }
-//!         }
+//!         _ => rest.len(),
 //!     }
 //! }
 //!
-//! assert_eq!(sum_csv_numbers(b"10, 20, 3", 0, 0), 33);
+//! assert_eq!(skip_leading_separators(b"  ,abc"), 3);
 //! ```
 //!
 //! Mutual recursion also works through the macro API as long as each participating function is
@@ -87,7 +79,7 @@
 //!
 //! impl Parity {
 //!     #[tailcall]
-//!     fn is_even(&self, x: u128) -> bool {
+//!     fn is_even(&self, x: u32) -> bool {
 //!         if x == 0 {
 //!             true
 //!         } else {
@@ -96,7 +88,7 @@
 //!     }
 //!
 //!     #[tailcall]
-//!     fn is_odd(&self, x: u128) -> bool {
+//!     fn is_odd(&self, x: u32) -> bool {
 //!         if x == 0 {
 //!             false
 //!         } else {
@@ -178,6 +170,11 @@
 //! stack. It may hold either the value directly or a type-erased closure that will eventually
 //! produce the value.
 //!
+//! On 64-bit targets, the current runtime keeps [`Thunk`] at 32 bytes. It achieves that by using
+//! a small inline storage slot for deferred closures, which means manual [`Thunk`] values and
+//! macro-generated helpers can only capture a limited amount of data before construction panics.
+//! Pending [`Thunk`] values still preserve normal destructor-on-drop behavior for their captures.
+//!
 //! You can construct one in three ways:
 //!
 //! - [`Thunk::value`] wraps a value directly
@@ -238,34 +235,23 @@
 //! ```rust
 //! use tailcall::runtime::Thunk;
 //!
-//! fn sum_csv(input: &str) -> u64 {
-//!     __tailcall_build_skip_separators_thunk(input.as_bytes(), 0).call()
+//! fn skip_leading_separators(input: &str) -> usize {
+//!     __tailcall_build_skip_separators_thunk(input.as_bytes()).call()
 //! }
 //!
-//! fn __tailcall_build_skip_separators_thunk<'a>(rest: &'a [u8], total: u64) -> Thunk<'a, u64> {
+//! fn __tailcall_build_skip_separators_thunk<'a>(rest: &'a [u8]) -> Thunk<'a, usize> {
 //!     Thunk::bounce(move || match rest {
-//!         [b' ' | b',', tail @ ..] => __tailcall_build_skip_separators_thunk(tail, total),
-//!         [] => Thunk::value(total),
-//!         _ => __tailcall_build_read_number_thunk(rest, total, 0),
+//!         [b' ' | b',', tail @ ..] => __tailcall_build_skip_separators_thunk(tail),
+//!         _ => Thunk::value(rest.len()),
 //!     })
 //! }
 //!
-//! fn __tailcall_build_read_number_thunk<'a>(rest: &'a [u8], total: u64, current: u64) -> Thunk<'a, u64> {
-//!     Thunk::bounce(move || match rest {
-//!         [digit @ b'0'..=b'9', tail @ ..] => {
-//!             let current = current * 10 + u64::from(digit - b'0');
-//!             __tailcall_build_read_number_thunk(tail, total, current)
-//!         }
-//!         _ => __tailcall_build_skip_separators_thunk(rest, total + current),
-//!     })
-//! }
-//!
-//! assert_eq!(sum_csv("10, 20, 3"), 33);
+//! assert_eq!(skip_leading_separators("  ,abc"), 3);
 //! ```
 //!
 //! The primary limitation of [`Thunk`] is that it type-erases the deferred closure into a fixed
-//! inline slot. That means each deferred closure can capture at most 48 bytes of data on the
-//! current implementation. If the closure's captures are larger than that, construction will
+//! inline slot. That means each deferred closure can capture at most about 16 bytes of data on
+//! the current implementation. If the closure's captures are larger than that, construction will
 //! panic.
 //!
 //! ## How The Macro Fits
@@ -317,7 +303,7 @@
 //! - mixed recursion is allowed, but only `tailcall::call!` sites are trampoline-backed; plain
 //!   recursive calls still use the native call stack
 //! - each generated helper is backed by a [`Thunk`], so very large argument lists or captures can
-//!   exceed the 48-byte deferred-closure budget
+//!   exceed the 16-byte deferred-closure budget
 //!
 //! The runtime can also be used directly through [`Thunk`] when you want to build the state
 //! machine yourself, but most users should only need the macro API shown above.

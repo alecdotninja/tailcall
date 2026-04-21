@@ -234,6 +234,12 @@ A `runtime::Thunk<T>` is a fixed-size deferred value from a computation, so it c
 stack. It may contain the value directly or a type-erased closure that will eventually produce the
 value.
 
+On 64-bit targets, the current runtime keeps `Thunk` at 32 bytes. It does that by storing deferred
+closures in a small inline slot, which means manual `Thunk` values and macro-generated helpers can
+only capture a limited amount of data before construction panics.
+
+Pending `Thunk` values still preserve normal destructor-on-drop behavior for captured values.
+
 You build a chain of steps, then execute it with `.call()`.
 
 ### Core constructors
@@ -321,7 +327,7 @@ Trait methods are not supported.
 
 ### Closure Size Limit
 
-Each deferred closure is stored in a fixed-size inline slot (~48 bytes).
+Each deferred closure is stored in a fixed-size inline slot (~16 bytes).
 
 **Closures that exceed that size panic when the `Thunk` is constructed.**
 

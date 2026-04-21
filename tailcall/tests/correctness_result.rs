@@ -1,29 +1,17 @@
-use std::io::Error;
 use tailcall::*;
 
 /// Factorial artificial wrapped in a Result
-fn factorial(input: u64) -> Result<u64, Error> {
+fn factorial(input: u64) -> Result<u64, ()> {
     #[tailcall]
-    fn factorial_inner(
-        accumulator: Result<u64, Error>,
-        input: Result<u64, Error>,
-    ) -> Result<u64, Error> {
-        let inp = match input {
-            Ok(input) => input,
-            Err(error) => return Err(error),
-        };
-        let acc = match accumulator {
-            Ok(accumulator) => accumulator,
-            Err(error) => return Err(error),
-        };
-        if inp > 0 {
-            tailcall::call! { factorial_inner(Ok(acc * inp), Ok(inp - 1)) }
+    fn factorial_inner(accumulator: u64, input: u64) -> Result<u64, ()> {
+        if input > 0 {
+            tailcall::call! { factorial_inner(accumulator * input, input - 1) }
         } else {
-            Ok(acc)
+            Ok(accumulator)
         }
     }
 
-    factorial_inner(Ok(1), Ok(input))
+    factorial_inner(1, input)
 }
 
 #[tailcall]

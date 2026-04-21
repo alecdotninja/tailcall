@@ -8,36 +8,29 @@ use core::{
     fmt,
     marker::PhantomData,
     mem::ManuallyDrop,
-    ptr::{drop_in_place, read},
+    ptr::{drop_in_place, read, NonNull},
 };
 
 use super::slot::Slot;
 
-// On 64-bit targets, 48 bytes of inline capture storage is the largest budget that still keeps
-// the full public `Thunk` representation at 64 bytes once the slot's 16-byte alignment and the
-// surrounding function pointers are accounted for.
-const MAX_THUNK_DATA_SIZE: usize = 48;
+// On 64-bit targets, 16 bytes of inline capture storage is the smallest useful budget with the
+// runtime's 16-byte slot alignment. Combined with the non-null shared vtable pointer below, that
+// allows the public `Thunk` representation to fit in 32 bytes while preserving
+// destructor-on-drop semantics.
+const MAX_CLOSURE_DATA_SIZE: usize = 16;
 
-type ErasedFnOnceSlot = Slot<MAX_THUNK_DATA_SIZE>;
-type CallFn<T> = fn(ErasedFnOnceSlot) -> T;
+type ErasedFnOnceSlot = Slot<MAX_CLOSURE_DATA_SIZE>;
+type CallFn<T> = unsafe fn(ErasedFnOnceSlot) -> T;
 type DropInPlaceFn = unsafe fn(*mut ErasedFnOnceSlot);
 
-#[repr(transparent)]
-/// A type-erased `FnOnce` stored in the runtime's stack slot.
-pub(crate) struct ErasedFnOnce<'a, T = ()> {
-    inner: Inner<'a, T>,
-}
-
-/// Owns the full erased `FnOnce` representation.
-///
-/// This inner struct holds the inline capture storage together with the function pointers needed
-/// to either call the erased closure or drop its captures in place. Keeping that state in a single
-/// field lets [`ErasedFnOnce`] move it out during `call()` while still preserving normal drop
-/// semantics when the erased closure is never invoked.
-struct Inner<'a, T> {
-    slot: ErasedFnOnceSlot,
+struct ErasedFnOnceVtable<T> {
     call_impl: CallFn<T>,
     drop_in_place_impl: DropInPlaceFn,
+}
+
+pub(crate) struct ErasedFnOnce<'a, T = ()> {
+    slot: ErasedFnOnceSlot,
+    vtable: NonNull<ErasedFnOnceVtable<T>>,
     _marker: PhantomData<dyn FnOnce() -> T + 'a>,
 }
 
@@ -51,19 +44,31 @@ impl<'a, T> ErasedFnOnce<'a, T> {
         F: FnOnce() -> T + 'a,
     {
         Self {
-            inner: Inner {
-                slot: Slot::new(fn_once),
-                call_impl: |slot| {
-                    // SAFETY: `slot` is initialized above with `F`.
-                    unsafe { slot.into_value::<F>()() }
-                },
-                drop_in_place_impl: |slot_ptr| {
-                    // SAFETY: `slot` is initialized above with `F`.
-                    unsafe { drop_in_place(slot_ptr.cast::<F>()) };
-                },
-                _marker: PhantomData,
+            slot: Slot::new(fn_once),
+            vtable: {
+                let vtable: *const ErasedFnOnceVtable<T> = &ErasedFnOnceVtable {
+                    call_impl: |slot| {
+                        // SAFETY: `slot` is initialized above with `F`.
+                        unsafe { slot.into_value::<F>()() }
+                    },
+                    drop_in_place_impl: |slot_ptr| {
+                        // SAFETY: `slot` is initialized above with `F`.
+                        unsafe { drop_in_place(slot_ptr.cast::<F>()) };
+                    },
+                };
+
+                // SAFETY: `vtable` points at the static per-closure-type table above and is
+                // therefore never null.
+                unsafe { NonNull::new_unchecked(vtable.cast_mut()) }
             },
+            _marker: PhantomData,
         }
+    }
+
+    #[inline(always)]
+    fn vtable(&self) -> &ErasedFnOnceVtable<T> {
+        // SAFETY: `vtable` always points at the static per-closure-type table created in `new`.
+        unsafe { self.vtable.as_ref() }
     }
 
     #[inline(always)]
@@ -71,20 +76,20 @@ impl<'a, T> ErasedFnOnce<'a, T> {
     pub(crate) fn call(self) -> T {
         let this = ManuallyDrop::new(self);
 
-        // SAFETY: `this` will not be dropped, so moving `inner` out cannot cause `Drop`
-        // to run after the closure has been taken from the slot.
-        let Inner {
-            slot, call_impl, ..
-        } = unsafe { read(&this.inner) };
+        // SAFETY: `this` will not be dropped, so moving the stored slot and vtable pointer out
+        // cannot cause the destructor path to run after the closure has been taken from the slot.
+        let slot = unsafe { read(&this.slot) };
+        let vtable = this.vtable();
 
-        call_impl(slot)
+        // SAFETY: This is the exact `call_impl` for the slot created above.
+        unsafe { (vtable.call_impl)(slot) }
     }
 }
 
 impl<T> Drop for ErasedFnOnce<'_, T> {
     fn drop(&mut self) {
         // SAFETY: We own the slot, and it cannot be used after dropping.
-        unsafe { (self.inner.drop_in_place_impl)(&mut self.inner.slot) }
+        unsafe { (self.vtable().drop_in_place_impl)(&mut self.slot) }
     }
 }
 

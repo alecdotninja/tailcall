@@ -13,10 +13,10 @@ fn is_odd_redux() {
 }
 
 #[test]
-fn sums_csv_numbers_with_mutual_recursion() {
-    assert_eq!(sum_csv_numbers("10, 20,3"), 33);
-    assert_eq!(sum_csv_numbers("7  , 8,   9"), 24);
-    assert_eq!(sum_csv_numbers(""), 0);
+fn skips_leading_separators_with_mutual_recursion() {
+    assert_eq!(skip_leading_separators("  ,abc"), 3);
+    assert_eq!(skip_leading_separators(", , ,"), 0);
+    assert_eq!(skip_leading_separators("abc"), 3);
 }
 
 fn is_even(x: u128) -> bool {
@@ -51,28 +51,26 @@ fn build_is_odd_action(x: u128) -> Thunk<'static, bool> {
     })
 }
 
-fn sum_csv_numbers(input: &str) -> u64 {
-    build_skip_separators_action(input.as_bytes(), 0).call()
+fn skip_leading_separators(input: &str) -> usize {
+    build_skip_spaces_action(input.as_bytes()).call()
 }
 
 #[doc(hidden)]
 #[inline(always)]
-fn build_skip_separators_action(rest: &[u8], total: u64) -> Thunk<'_, u64> {
+fn build_skip_spaces_action(rest: &[u8]) -> Thunk<'_, usize> {
     Thunk::bounce(move || match rest {
-        [b' ' | b',', tail @ ..] => build_skip_separators_action(tail, total),
-        [] => Thunk::value(total),
-        _ => build_read_number_action(rest, total, 0),
+        [b' ', tail @ ..] => build_skip_spaces_action(tail),
+        [b',', ..] => build_skip_commas_action(rest),
+        _ => Thunk::value(rest.len()),
     })
 }
 
 #[doc(hidden)]
 #[inline(always)]
-fn build_read_number_action(rest: &[u8], total: u64, current: u64) -> Thunk<'_, u64> {
+fn build_skip_commas_action(rest: &[u8]) -> Thunk<'_, usize> {
     Thunk::bounce(move || match rest {
-        [digit @ b'0'..=b'9', tail @ ..] => {
-            let current = current * 10 + u64::from(digit - b'0');
-            build_read_number_action(tail, total, current)
-        }
-        _ => build_skip_separators_action(rest, total + current),
+        [b',', tail @ ..] => build_skip_commas_action(tail),
+        [b' ', ..] => build_skip_spaces_action(rest),
+        _ => Thunk::value(rest.len()),
     })
 }

@@ -166,3 +166,135 @@ fn reject_unsupported_signature(sig: &Signature) -> Result<(), Error> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use proc_macro2::TokenStream;
+    use quote::quote;
+    use syn::parse_quote;
+
+    use super::{apply_fn_tailcall_transform, apply_method_tailcall_transform};
+
+    fn assert_expansion_eq(actual: TokenStream, expected: TokenStream) {
+        assert_eq!(actual.to_string(), expected.to_string());
+    }
+
+    #[test]
+    fn expands_runtime_backed_free_function_as_expected() {
+        let item_fn: syn::ItemFn = parse_quote! {
+            fn is_even(x: u32) -> bool {
+                if x == 0 {
+                    true
+                } else {
+                    tailcall::call! { is_odd(x - 1) }
+                }
+            }
+        };
+
+        let actual = apply_fn_tailcall_transform(item_fn);
+        let expected = quote! {
+            fn is_even(x: u32) -> bool {
+                __tailcall_build_is_even_thunk(x).call()
+            }
+
+            #[doc(hidden)]
+            #[allow(unused)]
+            #[inline(always)]
+            fn __tailcall_build_is_even_thunk<'tailcall>(x: u32) -> tailcall::runtime::Thunk<'tailcall, bool> {
+                tailcall::runtime::Thunk::bounce(move || {
+                    if x == 0 {
+                        tailcall::runtime::Thunk::value(true)
+                    } else {
+                        tailcall::call! { is_odd(x - 1) }
+                    }
+                })
+            }
+        };
+
+        assert_expansion_eq(actual, expected);
+    }
+
+    #[test]
+    fn expands_loop_lowered_free_function_as_expected() {
+        let item_fn: syn::ItemFn = parse_quote! {
+            fn countdown(n: u32) -> u32 {
+                if n > 0 {
+                    tailcall::call! { countdown(n - 1) }
+                } else {
+                    0
+                }
+            }
+        };
+
+        let actual = apply_fn_tailcall_transform(item_fn);
+        let expected = quote! {
+            fn countdown(n: u32) -> u32 {
+                let mut n = n;
+                loop {
+                    if n > 0 {
+                        {
+                            let __tailcall_next_0 = n - 1;
+                            n = __tailcall_next_0;
+                            continue;
+                        }
+                    } else {
+                        return 0
+                    }
+                }
+            }
+
+            #[doc(hidden)]
+            #[allow(unused)]
+            #[inline(always)]
+            fn __tailcall_build_countdown_thunk<'tailcall>(n: u32) -> tailcall::runtime::Thunk<'tailcall, u32> {
+                tailcall::runtime::Thunk::value(countdown(n))
+            }
+        };
+
+        assert_expansion_eq(actual, expected);
+    }
+
+    #[test]
+    fn expands_loop_lowered_method_as_expected() {
+        let method: syn::ImplItemMethod = parse_quote! {
+            fn countdown(&mut self, n: u32) -> u32 {
+                self.steps += 1;
+
+                if n > 0 {
+                    tailcall::call! { self.countdown(n - 1) }
+                } else {
+                    self.steps as u32
+                }
+            }
+        };
+
+        let actual = apply_method_tailcall_transform(method);
+        let expected = quote! {
+            fn countdown(&mut self, n: u32) -> u32 {
+                let __tailcall_self = self;
+                let mut n = n;
+                loop {
+                    __tailcall_self.steps += 1;
+                    if n > 0 {
+                        {
+                            let __tailcall_next_0 = n - 1;
+                            n = __tailcall_next_0;
+                            continue;
+                        }
+                    } else {
+                        return __tailcall_self.steps as u32
+                    }
+                }
+            }
+
+            #[doc(hidden)]
+            #[allow(unused)]
+            #[inline(always)]
+            fn __tailcall_build_countdown_thunk<'tailcall>(&'tailcall mut self, n: u32) -> tailcall::runtime::Thunk<'tailcall, u32> {
+                tailcall::runtime::Thunk::value(Self::countdown(self, n))
+            }
+        };
+
+        assert_expansion_eq(actual, expected);
+    }
+}

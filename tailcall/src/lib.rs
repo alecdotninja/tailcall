@@ -224,8 +224,8 @@
 //! assert_eq!(answer(), 42);
 //! ```
 //!
-//! Borrowed input works too. The lifetime on [`Thunk`] tracks anything captured by the deferred
-//! computation:
+//! Borrowed input works too. The lifetime on [`Thunk`] is the lifetime of the values captured by
+//! the deferred closure:
 //!
 //! ```rust
 //! use tailcall::Thunk;

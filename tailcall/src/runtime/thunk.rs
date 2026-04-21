@@ -52,9 +52,9 @@
 //! assert!(is_even(1000));
 //! ```
 //!
-//! The lifetime parameter on [`Thunk`](crate::Thunk) ties the thunk to any borrowed data captured
-//! by the deferred computation. For borrowed input, thread that lifetime through the
-//! builder functions and finish the computation with [`Thunk::call`](crate::Thunk::call):
+//! The lifetime parameter on [`Thunk`](crate::Thunk) is the lifetime of the values captured by the
+//! deferred closure. For borrowed input, thread that lifetime through the builder functions and
+//! finish the computation with [`Thunk::call`](crate::Thunk::call):
 //!
 //! ```rust
 //! use tailcall::Thunk;
@@ -105,30 +105,27 @@ enum ThunkKind<'a, T> {
 }
 
 impl<'a, T> Thunk<'a, T> {
-    /// Produces a completed [`Thunk`].
-    ///
-    /// This is the terminal step in a thunk computation.
-    pub const fn value(value: T) -> Self {
-        Self(ThunkKind::Done(value))
-    }
-
-    /// Produces a pending [`Thunk`] from a `FnOnce`.
-    ///
-    /// The closure is executed later by [`Thunk::call`], and must return the next [`Thunk`] in
-    /// the computation.
-    pub const fn bounce<F>(fn_once: F) -> Self
-    where
-        F: FnOnce() -> Self + 'a,
-    {
-        Self(ThunkKind::Bounce(ErasedThunk::new(fn_once)))
-    }
-
     /// Produces a pending [`Thunk`] from a `FnOnce` that resolves directly to a value.
     pub const fn new<F>(fn_once: F) -> Self
     where
         F: FnOnce() -> T + 'a,
     {
         Self::bounce(move || Self::value(fn_once()))
+    }
+
+    /// Produces a [`Thunk`] that resolves directly to a value.
+    pub const fn value(value: T) -> Self {
+        Self(ThunkKind::Done(value))
+    }
+
+    /// Produces a pending [`Thunk`] from a `FnOnce`.
+    ///
+    /// The closure must return the next [`Thunk`] in the computation.
+    pub const fn bounce<F>(fn_once: F) -> Self
+    where
+        F: FnOnce() -> Self + 'a,
+    {
+        Self(ThunkKind::Bounce(ErasedThunk::new(fn_once)))
     }
 
     /// Resolves the deferred computation to a final value.

@@ -18,10 +18,6 @@ pub fn is_simple_self_tail_recursive_method(method: &ImplItemMethod) -> bool {
 }
 
 fn analyze(item_fn: &ItemFn) -> (bool, bool) {
-    if !item_fn.sig.generics.params.is_empty() || item_fn.sig.generics.where_clause.is_some() {
-        return (false, false);
-    }
-
     if returns_result(&item_fn.sig.output) {
         return (false, false);
     }
@@ -37,10 +33,6 @@ fn analyze(item_fn: &ItemFn) -> (bool, bool) {
 }
 
 fn analyze_method(method: &ImplItemMethod) -> (bool, bool) {
-    if !method.sig.generics.params.is_empty() || method.sig.generics.where_clause.is_some() {
-        return (false, false);
-    }
-
     if returns_result(&method.sig.output) {
         return (false, false);
     }
@@ -393,5 +385,37 @@ mod tests {
 
         assert_eq!(analyze_method(&method), (false, false));
         assert!(!is_simple_self_tail_recursive_method(&method));
+    }
+
+    #[test]
+    fn accepts_generic_self_tail_recursion() {
+        let item_fn: syn::ItemFn = parse_quote! {
+            fn countdown<T: Copy>(n: u32, value: T) -> T {
+                if n > 0 {
+                    tailcall::call! { countdown(n - 1, value) }
+                } else {
+                    value
+                }
+            }
+        };
+
+        assert_eq!(analyze(&item_fn), (true, true));
+        assert!(is_simple_self_tail_recursive(&item_fn));
+    }
+
+    #[test]
+    fn accepts_generic_self_tail_recursive_method() {
+        let method: syn::ImplItemMethod = parse_quote! {
+            fn countdown<T: Copy>(&self, n: u32, value: T) -> T {
+                if n > 0 {
+                    tailcall::call! { self.countdown(n - 1, value) }
+                } else {
+                    value
+                }
+            }
+        };
+
+        assert_eq!(analyze_method(&method), (true, true));
+        assert!(is_simple_self_tail_recursive_method(&method));
     }
 }

@@ -67,18 +67,48 @@ It may not be ideal when:
 
 ## Cost
 
-`tailcall` avoids heap allocation.
+A common alternative for stack-safe recursion in Rust is to box each step. That can offer a similar
+interface, but it introduces allocation and indirection on every recursive step.
 
-That is an important difference from some other stack-safe recursion libraries with a similar
-interface, which build the recursive state machine on the heap.
+`tailcall` keeps each step inline instead, so the main cost is:
 
-The main runtime cost here is an indirect call at each `Thunk::bounce` step. In favorable cases,
-the optimizer may be able to devirtualize that call, but you should still think of the trampoline
-as paying for an extra dispatch per bounced step.
+* an extra indirect call per `Thunk::bounce` step
 
-For the simplest case, `#[tailcall]` can avoid that cost entirely. If a free function only
-tail-calls itself directly, the macro lowers it into an inline `loop` instead of routing through
-`Thunk`.
+In some cases, that cost disappears entirely. If a simple free function only tail-calls itself
+directly, `#[tailcall]` can lower it to an inline `loop`.
+
+---
+
+### Rough Performance Shape
+
+On a simple benchmark (relative to a handwritten loop):
+
+* handwritten loop: **1.0×**
+* `#[tailcall]` (inline loop): **~1.0×**
+* `#[tailcall]` (Thunk runtime): **~3.2× slower**
+* boxed runtime: **~14× slower**
+
+This is just a local measurement, but the general pattern holds:
+
+* direct self-recursion can optimize down to loop-like performance
+* the `Thunk` runtime is slower, but supports more complex cases
+* heap-allocating approaches are slower again
+
+---
+
+### Tradeoff
+
+The slower path is also the more flexible one.
+
+It’s what allows `tailcall` to support:
+
+* mutual recursion
+* borrowed-state builders
+* recursive control flow that doesn’t collapse into a single loop
+
+If your recursion is simple, you get loop-like performance.
+
+If it’s not, you still get stack safety—without paying for heap allocation.
 
 ---
 
@@ -162,7 +192,7 @@ struct Parity;
 
 impl Parity {
     #[tailcall]
-    fn is_even(&self, x: u128) -> bool {
+    fn is_even(&self, x: u32) -> bool {
         if x == 0 {
             true
         } else {
@@ -171,7 +201,7 @@ impl Parity {
     }
 
     #[tailcall]
-    fn is_odd(&self, x: u128) -> bool {
+    fn is_odd(&self, x: u32) -> bool {
         if x == 0 {
             false
         } else {

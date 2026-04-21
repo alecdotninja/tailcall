@@ -16,8 +16,10 @@
 
 extern crate proc_macro;
 
+mod analyze;
 mod call_syntax;
 mod expand;
+mod loop_lower;
 mod naming;
 mod rewrite;
 mod signature;
@@ -30,6 +32,10 @@ use syn::{parse_macro_input, ImplItemMethod, ItemFn};
 ///
 /// [function definition]: https://docs.rs/syn/1.0.9/syn/struct.ItemFn.html
 /// [tail recursion]: https://en.wikipedia.org/wiki/Tail_call
+///
+/// For simple free functions that only tail-call themselves directly, the macro lowers the
+/// function into an inline `loop`. More complex cases keep the hidden thunk-builder shape and run
+/// through `tailcall::runtime::Thunk`.
 ///
 /// # Example
 ///

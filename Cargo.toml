@@ -2,6 +2,7 @@
 
 members = [
     "no-std-smoke",
+    "std-smoke",
     "tailcall",
     "tailcall-impl",
 ]

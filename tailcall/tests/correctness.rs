@@ -84,6 +84,37 @@ fn test_qualified_tailcall_path_and_explicit_return() {
     assert_eq!(qualified_calls::countdown(5), 0);
 }
 
+#[tailcall]
+fn optimized_countdown(input: u64) -> u64 {
+    if input == 0 {
+        return 0;
+    }
+
+    tailcall::call! { optimized_countdown(input - 1) }
+}
+
+#[test]
+fn test_simple_self_tail_recursion_keeps_hidden_thunk_builder() {
+    assert_eq!(optimized_countdown(10), 0);
+    assert_eq!(__tailcall_build_optimized_countdown_thunk(10).call(), 0);
+}
+
+#[tailcall]
+fn countdown_with_shadowing(input: u64) -> u64 {
+    if input == 0 {
+        return 0;
+    }
+
+    let input = input - 1;
+    tailcall::call! { countdown_with_shadowing(input) }
+}
+
+#[test]
+fn test_shadowing_falls_back_to_thunk_backend() {
+    assert_eq!(countdown_with_shadowing(10), 0);
+    assert_eq!(__tailcall_build_countdown_with_shadowing_thunk(10).call(), 0);
+}
+
 fn gcd_with_trace(a: u64, b: u64) -> (u64, Vec<(u64, u64)>) {
     #[tailcall]
     fn gcd_inner(a: u64, b: u64, trace: &mut Vec<(u64, u64)>) -> u64 {

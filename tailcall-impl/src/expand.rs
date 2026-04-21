@@ -3,6 +3,8 @@ use quote::quote;
 use syn::{Error, ImplItemMethod, ItemFn, Signature};
 
 use crate::{
+    analyze::is_simple_self_tail_recursive,
+    loop_lower::lower_self_tail_loop,
     rewrite::TailPositionRewriter,
     signature::{function_argument_exprs, helper_signature, method_helper_signature},
 };
@@ -57,6 +59,7 @@ impl TailcallMethodTransform {
             }
 
             #[doc(hidden)]
+            #[allow(unused)]
             #[inline(always)]
             #helper_sig {
                 tailcall::runtime::Thunk::bounce(move || #helper_block)
@@ -83,18 +86,41 @@ impl TailcallTransform {
         let helper_sig = helper_signature(&sig);
         let helper_fn_ident = &helper_sig.ident;
         let helper_args = function_argument_exprs(&sig)?;
-        let helper_block = TailPositionRewriter::rewrite(*block)?;
+        let original_item_fn = ItemFn {
+            attrs: attrs.clone(),
+            vis: vis.clone(),
+            sig: sig.clone(),
+            block: block.clone(),
+        };
+        let optimized = is_simple_self_tail_recursive(&original_item_fn);
+        let wrapper_body = if optimized {
+            lower_self_tail_loop(&original_item_fn)?
+        } else {
+            quote! { #helper_fn_ident(#(#helper_args),*).call() }
+        };
+        let helper_body = if optimized {
+            let fn_ident = &sig.ident;
+            quote! {
+                tailcall::runtime::Thunk::value(#fn_ident(#(#helper_args),*))
+            }
+        } else {
+            let helper_block = TailPositionRewriter::rewrite(*block)?;
+            quote! {
+                tailcall::runtime::Thunk::bounce(move || #helper_block)
+            }
+        };
 
         Ok(quote! {
             #(#attrs)*
             #vis #sig {
-                #helper_fn_ident(#(#helper_args),*).call()
+                #wrapper_body
             }
 
             #[doc(hidden)]
+            #[allow(unused)]
             #[inline(always)]
             #helper_sig {
-                tailcall::runtime::Thunk::bounce(move || #helper_block)
+                #helper_body
             }
         })
     }

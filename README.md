@@ -76,6 +76,10 @@ The main runtime cost here is an indirect call at each `Thunk::bounce` step. In 
 the optimizer may be able to devirtualize that call, but you should still think of the trampoline
 as paying for an extra dispatch per bounced step.
 
+For the simplest case, `#[tailcall]` can avoid that cost entirely. If a free function only
+tail-calls itself directly, the macro lowers it into an inline `loop` instead of routing through
+`Thunk`.
+
 ---
 
 ## How It Works (Briefly)
@@ -100,6 +104,9 @@ This turns recursion into iteration under the hood.
 
 Most users only need the macro.
 
+For simple direct self-recursion, the macro can compile to an inline loop. Mutual recursion and
+other more complex cases continue to use the hidden `Thunk` builder automatically.
+
 ### Basic Pattern
 
 ```rust
@@ -114,6 +121,9 @@ fn f(...) -> T {
 ```
 
 Only calls wrapped in `tailcall::call!` are stack-safe.
+
+If the function only tail-calls itself directly, this pattern is also the one that enables the
+inline-loop optimization.
 
 ---
 

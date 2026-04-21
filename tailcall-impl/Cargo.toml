@@ -14,7 +14,7 @@ edition.workspace = true
 [dependencies]
 proc-macro2 = "~1"
 quote = "~1"
-syn = { version = "~1", features = ["full", "fold"] }
+syn = { version = "~1", features = ["full", "fold", "visit"] }
 
 [lib]
 proc-macro = true

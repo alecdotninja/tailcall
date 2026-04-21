@@ -2,8 +2,8 @@
 //!
 //! `tailcall` provides two layers:
 //!
-//! - the [`tailcall`] attribute macro, which rewrites a function to execute through the
-//!   trampoline runtime
+//! - the [`tailcall`] attribute macro, which rewrites a function either into an inline loop or to
+//!   execute through the trampoline runtime
 //! - the low-level runtime, exposed as [`runtime`] and re-exported at the crate root as [`Thunk`]
 //!
 //! The macro-based API is explicit at recursive call sites. Any tail call that should be executed
@@ -164,6 +164,11 @@
 //!
 //! In practice, most users should stop here. The macro handles the trampoline machinery and lets
 //! you write recursive code directly, with [`call!`] marking the tail-recursive transitions.
+//!
+//! When a `#[tailcall]` function only tail-calls itself directly, the macro can lower it to an
+//! inline `loop`, which removes the trampoline overhead entirely. More complex cases, such as
+//! mutual recursion or functions that need the full hidden builder shape, still use the
+//! [`Thunk`]-based runtime.
 //!
 //! ## Manual `Thunk`
 //!

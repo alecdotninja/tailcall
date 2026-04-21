@@ -57,3 +57,42 @@ impl<T, const SIZE: usize> SlotView<T, SIZE> {
         ManuallyDrop::into_inner(unsafe { self.value })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+
+    use super::Slot;
+
+    #[repr(align(32))]
+    struct OverAligned(u8);
+
+    #[test]
+    fn round_trips_stored_value() {
+        let slot = Slot::<8>::new(42_u64);
+        let value = unsafe { slot.into_value::<u64>() };
+
+        assert_eq!(value, 42);
+    }
+
+    #[test]
+    fn can_use_tail_padding_in_slot_layout() {
+        let value = [7_u8; 16];
+        let slot = Slot::<1>::new(value);
+        let round_trip = unsafe { slot.into_value::<[u8; 16]>() };
+
+        assert_eq!(round_trip, value);
+    }
+
+    #[test]
+    #[should_panic(expected = "value size exceeds slot capacity")]
+    fn rejects_values_that_exceed_slot_capacity() {
+        let _ = Slot::<16>::new([0_u8; 17]);
+    }
+
+    #[test]
+    #[should_panic(expected = "unsupported value alignment")]
+    fn rejects_values_with_unsupported_alignment() {
+        let _ = Slot::<32>::new(OverAligned(0));
+    }
+}

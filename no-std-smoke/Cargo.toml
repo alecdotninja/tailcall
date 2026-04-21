@@ -1,0 +1,8 @@
+[package]
+name = "no-std-smoke"
+version = "0.0.0"
+edition.workspace = true
+publish = false
+
+[dependencies]
+tailcall = { path = "../tailcall" }

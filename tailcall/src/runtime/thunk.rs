@@ -6,7 +6,7 @@
 //!
 //! The model is simple:
 //!
-//! - [`Thunk`](crate::Thunk) represents a deferred value from a computation
+//! - [`Thunk`](crate::Thunk) is a fixed-size deferred value from a computation
 //! - [`Thunk::value`](crate::Thunk::value) wraps a value directly
 //! - [`Thunk::new`](crate::Thunk::new) wraps a closure that will produce the value
 //! - [`Thunk::bounce`](crate::Thunk::bounce) wraps a closure that will produce another
@@ -92,10 +92,13 @@ use core::{any::type_name, fmt};
 
 use super::ErasedFnOnce;
 
-/// An opaque deferred value in the thunk runtime.
+/// A fixed-size deferred value in the thunk runtime.
 ///
-/// Values of this type are created with [`Thunk::new`], [`Thunk::value`], and
-/// [`Thunk::bounce`], then consumed by [`Thunk::call`].
+/// A [`Thunk`] is small enough to live on the stack. It may hold either the value directly or a
+/// type-erased closure that will eventually produce the value.
+///
+/// Values of this type are created with [`Thunk::new`], [`Thunk::value`], and [`Thunk::bounce`],
+/// then consumed by [`Thunk::call`].
 pub struct Thunk<'a, T>(ThunkKind<'a, T>);
 
 enum ThunkKind<'a, T> {
@@ -141,5 +144,19 @@ impl<'a, T> Thunk<'a, T> {
 impl<T> fmt::Debug for Thunk<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Thunk -> {}", type_name::<T>())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Thunk;
+    use core::mem::size_of;
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn thunk_is_64_bytes_on_64_bit_targets() {
+        assert_eq!(size_of::<Thunk<'static, ()>>(), 64);
+        assert_eq!(size_of::<Thunk<'static, bool>>(), 64);
+        assert_eq!(size_of::<Thunk<'static, u64>>(), 64);
     }
 }

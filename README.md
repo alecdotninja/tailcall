@@ -220,7 +220,8 @@ fn factorial(n: u64) -> u64 {
 
 The macro is just a thin layer over `Thunk`.
 
-A `Thunk<T>` is a deferred value from a computation.
+A `Thunk<T>` is a fixed-size deferred value from a computation, so it can live on the stack. It
+may contain the value directly or a type-erased closure that will eventually produce the value.
 
 You build a chain of steps, then execute it with `.call()`.
 
@@ -311,7 +312,7 @@ Trait methods are not supported.
 
 Each deferred closure is stored in a fixed-size inline slot (~48 bytes).
 
-**Closures that exceed that size are rejected at compile time.**
+**Closures that exceed that size panic when the `Thunk` is constructed.**
 
 Macro-generated helper thunks are subject to the same limit, so functions with enough arguments or captured state can also exceed it.
 

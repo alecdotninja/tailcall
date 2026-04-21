@@ -83,6 +83,18 @@ use syn::{parse_macro_input, ImplItemMethod, ItemFn};
 /// }
 /// ```
 ///
+/// - Function arguments must use simple identifier patterns:
+///
+/// ```compile_fail
+/// use tailcall::tailcall;
+///
+/// #[tailcall]
+/// fn sum((left, right): (u64, u64)) -> u64 {
+/// //      ^^^^^^^^^^^^^ Simple identifier arguments are required.
+///     left + right
+/// }
+/// ```
+///
 /// - Methods in `impl` blocks are supported, but trait methods are not:
 ///
 /// ```compile_fail
@@ -105,6 +117,34 @@ use syn::{parse_macro_input, ImplItemMethod, ItemFn};
 ///         } else {
 ///             accumulator
 ///         }
+///     }
+/// }
+/// ```
+///
+/// - `async fn` and `const fn` are not supported:
+///
+/// ```compile_fail
+/// use tailcall::tailcall;
+///
+/// #[tailcall]
+/// async fn countdown(input: u64) -> u64 {
+///     if input > 0 {
+///         tailcall::call! { countdown(input - 1) }
+///     } else {
+///         0
+///     }
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use tailcall::tailcall;
+///
+/// #[tailcall]
+/// const fn countdown(input: u64) -> u64 {
+///     if input > 0 {
+///         tailcall::call! { countdown(input - 1) }
+///     } else {
+///         0
 ///     }
 /// }
 /// ```

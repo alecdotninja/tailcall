@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "no-std-smoke",
     "tailcall",
     "tailcall-impl",
 ]

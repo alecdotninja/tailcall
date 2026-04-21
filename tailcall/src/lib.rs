@@ -168,7 +168,9 @@
 //! ## Manual `Thunk`
 //!
 //! If you need direct control over the runtime, the low-level API is [`Thunk`].
-//! A [`Thunk`] represents a deferred value from a computation.
+//! A [`Thunk`] is a fixed-size deferred value from a computation, which means it can live on the
+//! stack. It may hold either the value directly or a type-erased closure that will eventually
+//! produce the value.
 //!
 //! You can construct one in three ways:
 //!

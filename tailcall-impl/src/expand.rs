@@ -53,7 +53,7 @@ impl TailcallMethodTransform {
         let original_method = ImplItemMethod {
             attrs: attrs.clone(),
             vis: vis.clone(),
-            defaultness: defaultness.clone(),
+            defaultness,
             sig: sig.clone(),
             block: block.clone(),
         };

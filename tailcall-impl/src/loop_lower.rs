@@ -162,9 +162,8 @@ impl LoopLowerer {
                 if_token,
                 cond: Box::new(self.fold_expr(*cond)),
                 then_branch: self.lower_tail_block(then_branch),
-                else_branch: else_branch.map(|(else_token, expr)| {
-                    (else_token, Box::new(self.lower_tail_expr(*expr)))
-                }),
+                else_branch: else_branch
+                    .map(|(else_token, expr)| (else_token, Box::new(self.lower_tail_expr(*expr)))),
             }),
             Expr::Match(ExprMatch {
                 attrs,

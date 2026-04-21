@@ -111,7 +111,10 @@ fn generic_countdown<T: Copy>(input: u64, value: T) -> T {
 #[test]
 fn test_generic_self_tail_recursion_keeps_hidden_thunk_builder() {
     assert_eq!(generic_countdown(10, 42_u32), 42);
-    assert_eq!(__tailcall_build_generic_countdown_thunk(10, 42_u32).call(), 42);
+    assert_eq!(
+        __tailcall_build_generic_countdown_thunk(10, 42_u32).call(),
+        42
+    );
 }
 
 #[tailcall]
@@ -127,7 +130,10 @@ fn countdown_with_shadowing(input: u64) -> u64 {
 #[test]
 fn test_shadowing_falls_back_to_thunk_backend() {
     assert_eq!(countdown_with_shadowing(10), 0);
-    assert_eq!(__tailcall_build_countdown_with_shadowing_thunk(10).call(), 0);
+    assert_eq!(
+        __tailcall_build_countdown_with_shadowing_thunk(10).call(),
+        0
+    );
 }
 
 fn gcd_with_trace(a: u64, b: u64) -> (u64, Vec<(u64, u64)>) {
@@ -266,7 +272,7 @@ fn test_mutable_receiver_methods_work_with_tailcall() {
 }
 
 #[test]
-    fn test_self_recursive_methods_keep_hidden_thunk_builder() {
+fn test_self_recursive_methods_keep_hidden_thunk_builder() {
     let mut accumulator = MethodAccumulator::default();
     let total = accumulator.__tailcall_build_tick_down_thunk(8).call();
 

@@ -267,7 +267,8 @@ mod tests {
     use syn::parse_quote;
 
     use super::{
-        analyze, analyze_method, is_simple_self_tail_recursive, is_simple_self_tail_recursive_method,
+        analyze, analyze_method, is_simple_self_tail_recursive,
+        is_simple_self_tail_recursive_method,
     };
     use crate::call_syntax::is_tailcall_macro;
 

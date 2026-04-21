@@ -313,7 +313,10 @@ fn scramble_tailcall_thunk(n: u64, state: u64) -> u64 {
 fn bench_scramble_loop(b: &mut Bencher) {
     let mut val = SCRAMBLE_TEST_NUM;
     b.iter(|| {
-        black_box(scramble_loop(black_box(val), black_box(0xDEAD_BEEF_DEAD_BEEF)));
+        black_box(scramble_loop(
+            black_box(val),
+            black_box(0xDEAD_BEEF_DEAD_BEEF),
+        ));
         val += 1;
     });
 }

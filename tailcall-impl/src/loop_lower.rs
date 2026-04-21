@@ -57,8 +57,8 @@ fn function_arg_idents(
     inputs
         .iter()
         .filter_map(|fn_arg| match fn_arg {
-            syn::FnArg::Receiver(_) => None,
-            syn::FnArg::Typed(PatType { pat, .. }) => Some(match &**pat {
+            FnArg::Receiver(_) => None,
+            FnArg::Typed(PatType { pat, .. }) => Some(match &**pat {
                 Pat::Ident(PatIdent {
                     attrs,
                     by_ref: None,

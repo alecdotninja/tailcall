@@ -57,7 +57,7 @@ fn sum_csv_numbers(input: &str) -> u64 {
 
 #[doc(hidden)]
 #[inline(always)]
-fn build_skip_separators_action<'a>(rest: &'a [u8], total: u64) -> Thunk<'a, u64> {
+fn build_skip_separators_action(rest: &[u8], total: u64) -> Thunk<'_, u64> {
     Thunk::bounce(move || match rest {
         [b' ' | b',', tail @ ..] => build_skip_separators_action(tail, total),
         [] => Thunk::value(total),
@@ -67,7 +67,7 @@ fn build_skip_separators_action<'a>(rest: &'a [u8], total: u64) -> Thunk<'a, u64
 
 #[doc(hidden)]
 #[inline(always)]
-fn build_read_number_action<'a>(rest: &'a [u8], total: u64, current: u64) -> Thunk<'a, u64> {
+fn build_read_number_action(rest: &[u8], total: u64, current: u64) -> Thunk<'_, u64> {
     Thunk::bounce(move || match rest {
         [digit @ b'0'..=b'9', tail @ ..] => {
             let current = current * 10 + u64::from(digit - b'0');

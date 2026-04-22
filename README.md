@@ -4,7 +4,7 @@
 [![Current Crates.io Version](https://img.shields.io/crates/v/tailcall.svg)](https://crates.io/crates/tailcall)
 [![Docs](https://docs.rs/tailcall/badge.svg)](https://docs.rs/tailcall)
 
-`tailcall` lets you write deeply recursive functions without blowing the stack—on stable Rust.
+`tailcall` lets you write deeply recursive functions without blowing the stack on stable Rust.
 
 It provides **explicit, stack-safe tail calls** using a lightweight trampoline runtime, with a macro that keeps usage ergonomic.
 
@@ -12,7 +12,6 @@ The runtime crate is `no_std`, so it can be used on targets without the standard
 
 If the proposed [`become` keyword](https://internals.rust-lang.org/t/pre-rfc-explicit-proper-tail-calls/3797/16) is ever stabilized, it will likely be the preferred solution for proper tail calls.
 
----
 
 ## Installation
 
@@ -21,7 +20,6 @@ If the proposed [`become` keyword](https://internals.rust-lang.org/t/pre-rfc-exp
 tailcall = "~2"
 ```
 
----
 
 ## Quick Example
 
@@ -47,25 +45,26 @@ That’s the core API:
 
 This runs in constant stack space, even for very large inputs.
 
----
 
-## When to Use This
+## How It Works
 
-`tailcall` is useful when:
+Rust does not guarantee tail call optimization. Deep recursion can overflow the stack.
 
-* you want to write **naturally recursive code** without risking stack overflow
-* converting to loops would make the code harder to read
-* you’re working with **mutual recursion** or recursive traversals
-* you want stack safety without nightly features
+`tailcall` avoids this by turning recursive steps into deferred computations and executing them in
+a loop:
 
-It may not be ideal when:
+* each recursive step returns a deferred computation (`Thunk`)
+* the runtime repeatedly executes those steps in a loop
+* no additional stack frames are created
 
-* a simple loop is clearer
-* you need maximum performance (there is some trampoline overhead)
+For simple direct self-recursion, `#[tailcall]` lowers the function or method to an inline loop.
+When that is not possible, such as with mutual recursion or other more complex control flow, the
+macro falls back to the more general `Thunk` runtime.
 
----
+This turns recursion into iteration under the hood.
 
-## Cost
+
+## Performance & Tradeoffs
 
 A common alternative for stack-safe recursion in Rust is to box each step. That can offer a similar
 interface, but it introduces allocation and indirection on every recursive step.
@@ -77,58 +76,22 @@ interface, but it introduces allocation and indirection on every recursive step.
 In some cases, that cost disappears entirely. If a simple free function or inherent method only
 tail-calls itself directly, `#[tailcall]` can lower it to an inline `loop`.
 
----
 
-### Rough Performance Shape
+### Benchmark
 
 On a simple benchmark (relative to a handwritten loop):
 
 * handwritten loop: **1.0×**
 * `#[tailcall]` (inline loop): **~1.0×**
 * `#[tailcall]` (Thunk runtime): **~3.2× slower**
-* boxed runtime: **~14× slower**
+* toy comparison boxed runtime: **~14× slower**
 
-This is just a local measurement, but the general pattern holds:
+This is just a local measurement, but the general shape is the important part:
 
 * direct self-recursion can optimize down to loop-like performance
-* the `Thunk` runtime is slower, but supports more complex cases
-* heap-allocating approaches are slower again
+* the `Thunk` runtime is slower, but it supports more complex cases such as mutual recursion, borrowed-state builders, and recursive control flow that doesn’t collapse into a single loop
+* heap-allocating approaches are slower again (and therefore never used by `tailcall`)
 
----
-
-### Tradeoff
-
-The slower path is also the more flexible one.
-
-It’s what allows `tailcall` to support:
-
-* mutual recursion
-* borrowed-state builders
-* recursive control flow that doesn’t collapse into a single loop
-
-If your recursion is simple, you get loop-like performance.
-
-If it’s not, you still get stack safety—without paying for heap allocation.
-
----
-
-## How It Works (Briefly)
-
-Rust does not guarantee tail call optimization. Deep recursion can overflow the stack.
-
-`tailcall` avoids this by using a **trampoline**:
-
-* each recursive step returns a deferred computation (`Thunk`)
-* the runtime repeatedly executes those steps in a loop
-* no additional stack frames are created
-
-The key operation is:
-
-* `Thunk::bounce(...)` — produces the *next step* instead of recursing
-
-This turns recursion into iteration under the hood.
-
----
 
 ## Macro Usage
 
@@ -137,10 +100,6 @@ Most users only need the macro.
 For simple direct self-recursion, the macro can compile free functions and inherent methods to an
 inline loop. Mutual recursion and other more complex cases continue to use the hidden `Thunk`
 builder automatically.
-
-For methods, that optimized path works by aliasing the receiver once, rebinding the
-non-receiver arguments as loop state, and turning each direct self tail call into "assign the
-next arguments, then continue the loop".
 
 ### Basic Pattern
 
@@ -157,10 +116,6 @@ fn f(...) -> T {
 
 Only calls wrapped in `tailcall::call!` are stack-safe.
 
-If the function only tail-calls itself directly, this pattern is also the one that enables the
-inline-loop optimization.
-
----
 
 ### Mutual Recursion
 
@@ -186,7 +141,6 @@ fn is_odd(x: u128) -> bool {
 }
 ```
 
----
 
 ### Methods
 
@@ -216,7 +170,6 @@ impl Parity {
 }
 ```
 
----
 
 ### Mixed Recursion
 
@@ -238,7 +191,6 @@ fn sum(n: u64) -> u64 {
 }
 ```
 
----
 
 ### Recommended Pattern: Tail-Recursive Helper
 
@@ -259,11 +211,10 @@ fn factorial(n: u64) -> u64 {
 }
 ```
 
----
 
 ## Using the Runtime Directly
 
-The macro is just a thin layer over `runtime::Thunk`.
+For the more general cases, the macro is a thin layer over `runtime::Thunk`.
 
 A `runtime::Thunk<T>` is a fixed-size deferred value from a computation, so it can live on the
 stack. It may contain the value directly or a type-erased closure that will eventually produce the
@@ -277,13 +228,12 @@ Pending `Thunk` values still preserve normal destructor-on-drop behavior for cap
 
 You build a chain of steps, then execute it with `.call()`.
 
-### Core constructors
+### Core Constructors
 
 * `Thunk::value(x)` — final result
 * `Thunk::new(f)` — deferred computation returning a value
 * `Thunk::bounce(f)` — deferred computation returning another `Thunk` (**this is what enables stack safety**)
 
----
 
 ### Example
 
@@ -307,68 +257,19 @@ fn build(n: u64) -> Thunk<'static, u64> {
 
 `Thunk::bounce` ensures each step returns control to the runtime loop instead of growing the call stack.
 
----
-
-## What the Macro Generates
-
-At a high level, this:
-
-```rust
-#[tailcall]
-fn f(...) -> T { ... }
-```
-
-becomes:
-
-* a wrapper that calls `.call()`
-* a hidden builder that returns `Thunk<T>`
-
-So the macro:
-
-* rewrites your function into a trampoline-compatible form
-* leaves control flow and logic unchanged
-
----
 
 ## Limitations
 
-### Explicit Tail Calls
+* `#[tailcall]` currently only supports simple identifier arguments.
+  Patterns in function parameters are not rewritten by the macro.
+* The `?` operator is not supported inside `#[tailcall]` functions on stable Rust.
+  Use `match` or explicit early returns instead.
+* Methods in ordinary `impl` blocks are supported.
+  Trait methods are not supported.
+* `#[tailcall]` does not support `async fn` or `const fn`.
+* Each deferred closure is stored in a fixed-size inline slot (~16 bytes).
+  Closures that exceed that size panic when the `Thunk` is constructed.
 
-Tail-recursive transitions must be written with `tailcall::call!`.
-
-Plain recursive calls are left alone, which means they still use the native Rust call stack.
-
-### Simple Argument Patterns
-
-`#[tailcall]` currently only supports simple identifier arguments.
-
-Patterns in function parameters are not rewritten by the macro.
-
-### `?` Is Not Supported
-
-The `?` operator is not supported inside `#[tailcall]` functions on stable Rust.
-
-Use `match` or explicit early returns instead.
-
-### Trait Methods
-
-Methods in ordinary `impl` blocks are supported.
-
-Trait methods are not supported.
-
-### `async fn` and `const fn`
-
-`#[tailcall]` does not support `async fn` or `const fn`.
-
-### Closure Size Limit
-
-Each deferred closure is stored in a fixed-size inline slot (~16 bytes).
-
-**Closures that exceed that size panic when the `Thunk` is constructed.**
-
-Macro-generated helper thunks are subject to the same limit, so functions with enough arguments or captured state can also exceed it.
-
----
 
 ## Development
 
@@ -385,7 +286,6 @@ cargo doc --no-deps
 
 If you are changing the public docs or runtime internals, it is also worth doing a quick end-to-end smoke test from a fresh crate that depends on the published version from crates.io.
 
----
 
 ## Publishing
 
@@ -422,7 +322,6 @@ git push origin main
 git push origin vX.Y.Z
 ```
 
----
 
 ## License
 

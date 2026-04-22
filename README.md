@@ -4,7 +4,7 @@
 [![Current Crates.io Version](https://img.shields.io/crates/v/tailcall.svg)](https://crates.io/crates/tailcall)
 [![Docs](https://docs.rs/tailcall/badge.svg)](https://docs.rs/tailcall)
 
-`tailcall` lets you write deeply recursive functions in Rust without blowing the stack—on stable Rust.
+`tailcall` lets you write deeply recursive functions without blowing the stack—on stable Rust.
 
 It provides **explicit, stack-safe tail calls** using a lightweight trampoline runtime, with a macro that keeps usage ergonomic.
 

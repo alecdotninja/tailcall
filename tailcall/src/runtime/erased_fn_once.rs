@@ -114,8 +114,8 @@ mod tests {
     extern crate std;
 
     use super::ErasedFnOnce;
-    use std::{boxed::Box, string::String};
     use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::{boxed::Box, string::String};
 
     #[repr(align(32))]
     struct OverAligned(u8);

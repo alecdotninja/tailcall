@@ -3,8 +3,8 @@ use quote::quote;
 use syn::{
     fold::{self, Fold},
     parse2, parse_quote, Error, Expr, ExprBlock, ExprCall, ExprIf, ExprMacro, ExprMatch,
-    ExprMethodCall, ExprPath, ExprReturn, ExprTry, FnArg, Ident, ImplItemFn, Item, ItemFn,
-    Pat, PatIdent, PatType, Stmt, StmtMacro,
+    ExprMethodCall, ExprPath, ExprReturn, ExprTry, FnArg, Ident, ImplItemFn, Item, ItemFn, Pat,
+    PatIdent, PatType, Stmt, StmtMacro,
 };
 
 use crate::call_syntax::is_tailcall_macro;

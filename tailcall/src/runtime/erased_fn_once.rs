@@ -7,7 +7,7 @@ use core::{
     any::type_name,
     fmt,
     marker::PhantomData,
-    mem::ManuallyDrop,
+    mem::{align_of, size_of, ManuallyDrop},
     ptr::{drop_in_place, read, NonNull},
 };
 
@@ -43,6 +43,16 @@ impl<'a, T> ErasedFnOnce<'a, T> {
     where
         F: FnOnce() -> T + 'a,
     {
+        assert!(
+            align_of::<F>() <= align_of::<ErasedFnOnceSlot>(),
+            "tailcall runtime cannot store this closure inline because its alignment exceeds the thunk slot alignment; reduce what the closure captures or move large/over-aligned state behind a pointer",
+        );
+
+        assert!(
+            size_of::<F>() <= MAX_CLOSURE_DATA_SIZE,
+            "tailcall runtime cannot store this closure inline because its captured state exceeds the thunk slot capacity; reduce captures, pass state as function arguments, or box large captured values",
+        );
+
         Self {
             slot: Slot::new(fn_once),
             vtable: {
@@ -104,7 +114,11 @@ mod tests {
     extern crate std;
 
     use super::ErasedFnOnce;
+    use std::{boxed::Box, string::String};
     use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    #[repr(align(32))]
+    struct OverAligned(u8);
 
     #[test]
     fn sanity() {
@@ -123,8 +137,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn with_too_many_captures() {
+    fn with_too_many_captures_reports_actionable_message() {
         let a: u64 = 1;
         let b: u64 = 2;
         let c: u64 = 3;
@@ -134,7 +147,28 @@ mod tests {
         let g: u64 = 7;
         let h: u64 = 8;
 
-        let _ = ErasedFnOnce::new(move || a + b + c + d + e + f + g + h);
+        let panic = catch_unwind(AssertUnwindSafe(|| {
+            let _ = ErasedFnOnce::new(move || a + b + c + d + e + f + g + h);
+        }))
+        .expect_err("expected oversized closure capture to panic");
+
+        let message = panic_message(&panic);
+        assert!(message.contains("captured state exceeds the thunk slot capacity"));
+        assert!(message.contains("pass state as function arguments"));
+    }
+
+    #[test]
+    fn over_aligned_capture_reports_actionable_message() {
+        let value = OverAligned(0);
+
+        let panic = catch_unwind(AssertUnwindSafe(|| {
+            let _ = ErasedFnOnce::new(move || value.0);
+        }))
+        .expect_err("expected over-aligned closure capture to panic");
+
+        let message = panic_message(&panic);
+        assert!(message.contains("alignment exceeds the thunk slot alignment"));
+        assert!(message.contains("move large/over-aligned state behind a pointer"));
     }
 
     #[test]
@@ -190,6 +224,16 @@ mod tests {
     impl Drop for DropTracker {
         fn drop(&mut self) {
             self.drops.set(self.drops.get() + 1);
+        }
+    }
+
+    fn panic_message(panic: &Box<dyn core::any::Any + Send>) -> &str {
+        if let Some(message) = panic.downcast_ref::<&'static str>() {
+            message
+        } else if let Some(message) = panic.downcast_ref::<String>() {
+            message.as_str()
+        } else {
+            panic!("unexpected panic payload type");
         }
     }
 }

@@ -175,9 +175,9 @@
 //! stack. It may hold either the value directly or a type-erased closure that will eventually
 //! produce the value.
 //!
-//! On 64-bit targets, the current runtime keeps [`Thunk`] at 32 bytes. It achieves that by using
-//! a small inline storage slot for deferred closures, which means manual [`Thunk`] values and
-//! macro-generated helpers can only capture a limited amount of data before construction panics.
+//! On 64-bit targets, the default runtime keeps [`Thunk`] at 32 bytes. Optional crate features
+//! can opt into larger [`Thunk`] sizes with larger inline closure budgets, but the same tradeoff
+//! remains: if a closure exceeds the configured inline budget, construction panics.
 //! Pending [`Thunk`] values still preserve normal destructor-on-drop behavior for their captures.
 //!
 //! You can construct one in three ways:
@@ -255,9 +255,9 @@
 //! ```
 //!
 //! The primary limitation of [`Thunk`] is that it type-erases the deferred closure into a fixed
-//! inline slot. That means each deferred closure can capture at most about 16 bytes of data on
-//! the current implementation. If the closure's captures are larger than that, construction will
-//! panic.
+//! inline slot. By default, each deferred closure can capture about 16 bytes of data on 64-bit
+//! targets. Optional crate features can increase that budget by making [`Thunk`] itself larger.
+//! If the closure's captures are larger than the configured budget, construction will panic.
 //!
 //! ## How The Macro Fits
 //!

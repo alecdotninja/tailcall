@@ -9,10 +9,10 @@ use super::ErasedFnOnce;
 /// A [`Thunk`] is small enough to live on the stack. It may hold either the value directly or a
 /// type-erased closure that will eventually produce the value.
 ///
-/// On 64-bit targets, the current runtime representation keeps [`Thunk`] at 32 bytes. That size
-/// target is achieved by storing deferred closures in a small inline slot. As a result, manual
-/// [`Thunk`] values and macro-generated helpers can only capture a limited amount of data before
-/// construction panics.
+/// On 64-bit targets, the default runtime representation keeps [`Thunk`] at 32 bytes. Optional
+/// crate features can trade a larger [`Thunk`] for a larger inline closure budget. As a result,
+/// manual [`Thunk`] values and macro-generated helpers can only capture a limited amount of data
+/// before construction panics.
 ///
 /// Dropping a pending [`Thunk`] still preserves normal destructor semantics for its captured
 /// values.
@@ -75,9 +75,34 @@ mod tests {
 
     #[cfg(target_pointer_width = "64")]
     #[test]
+    #[cfg(not(any(
+        feature = "at-least-inline-captures-32",
+        feature = "at-least-inline-captures-48"
+    )))]
     fn thunk_is_32_bytes_on_64_bit_targets() {
         assert_eq!(size_of::<Thunk<'static, ()>>(), 32);
         assert_eq!(size_of::<Thunk<'static, bool>>(), 32);
         assert_eq!(size_of::<Thunk<'static, u64>>(), 32);
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    #[cfg(all(
+        feature = "at-least-inline-captures-32",
+        not(feature = "at-least-inline-captures-48")
+    ))]
+    fn thunk_is_48_bytes_on_64_bit_targets() {
+        assert_eq!(size_of::<Thunk<'static, ()>>(), 48);
+        assert_eq!(size_of::<Thunk<'static, bool>>(), 48);
+        assert_eq!(size_of::<Thunk<'static, u64>>(), 48);
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    #[cfg(feature = "at-least-inline-captures-48")]
+    fn thunk_is_64_bytes_on_64_bit_targets() {
+        assert_eq!(size_of::<Thunk<'static, ()>>(), 64);
+        assert_eq!(size_of::<Thunk<'static, bool>>(), 64);
+        assert_eq!(size_of::<Thunk<'static, u64>>(), 64);
     }
 }

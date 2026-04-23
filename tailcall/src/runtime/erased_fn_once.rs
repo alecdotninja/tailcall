@@ -13,12 +13,21 @@ use core::{
 
 use super::slot::Slot;
 
-// On 64-bit targets, 16 bytes of inline capture storage is the smallest useful budget with the
-// runtime's 16-byte slot alignment. Combined with the non-null shared vtable pointer below, that
-// allows the public `Thunk` representation to fit in 32 bytes while preserving
-// destructor-on-drop semantics.
+#[cfg(feature = "at-least-inline-captures-48")]
+const MAX_CLOSURE_DATA_SIZE: usize = 48;
+#[cfg(all(
+    not(feature = "at-least-inline-captures-48"),
+    feature = "at-least-inline-captures-32"
+))]
+const MAX_CLOSURE_DATA_SIZE: usize = 32;
+#[cfg(all(
+    not(feature = "at-least-inline-captures-48"),
+    not(feature = "at-least-inline-captures-32")
+))]
 const MAX_CLOSURE_DATA_SIZE: usize = 16;
 
+// On 64-bit targets, the closure slot is chosen so the overall `Thunk` lands on one of the
+// useful size plateaus instead of wasting the extra aligned bytes between them.
 type ErasedFnOnceSlot = Slot<MAX_CLOSURE_DATA_SIZE>;
 type CallFn<T> = unsafe fn(ErasedFnOnceSlot) -> T;
 type DropInPlaceFn = unsafe fn(*mut ErasedFnOnceSlot);
@@ -50,7 +59,7 @@ impl<'a, T> ErasedFnOnce<'a, T> {
 
         assert!(
             size_of::<F>() <= MAX_CLOSURE_DATA_SIZE,
-            "tailcall runtime cannot store this closure inline because its captured state exceeds the thunk slot capacity; reduce captures, pass state as function arguments, or box large captured values",
+            "tailcall runtime cannot store this closure inline because its captured state exceeds the configured thunk slot capacity; reduce captures, pass state as function arguments, box large captured values, or enable a larger thunk size feature",
         );
 
         Self {
@@ -150,7 +159,7 @@ mod tests {
         .expect_err("expected oversized closure capture to panic");
 
         let message = panic_message(&panic);
-        assert!(message.contains("captured state exceeds the thunk slot capacity"));
+        assert!(message.contains("captured state exceeds the configured thunk slot capacity"));
         assert!(message.contains("pass state as function arguments"));
     }
 

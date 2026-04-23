@@ -218,9 +218,16 @@ A `runtime::Thunk<T>` is a fixed-size deferred value from a computation, so it c
 stack. It may contain the value directly or a type-erased closure that will eventually produce the
 value.
 
-On 64-bit targets, the current runtime keeps `Thunk` at 32 bytes. It does that by storing deferred
-closures in a small inline slot, which means manual `Thunk` values and macro-generated helpers can
-only capture a limited amount of data before construction panics.
+On 64-bit targets, the default runtime keeps `Thunk` at 32 bytes. That uses a small inline slot
+for deferred closures, which means manual `Thunk` values and macro-generated helpers can only
+capture a limited amount of data before construction panics. Optional features can trade a larger
+`Thunk` for a larger inline capture budget.
+
+Available `tailcall` feature tiers:
+
+* default: `Thunk` is 32 bytes, with about 16 bytes of inline capture budget
+* `at-least-inline-captures-32`: `Thunk` is 48 bytes, with about 32 bytes of inline capture budget
+* `at-least-inline-captures-48`: `Thunk` is 64 bytes, with about 48 bytes of inline capture budget
 
 Pending `Thunk` values still preserve normal destructor-on-drop behavior for captured values.
 
@@ -265,8 +272,9 @@ fn build(n: u64) -> Thunk<'static, u64> {
 * Methods in ordinary `impl` blocks are supported.
   Trait methods are not supported.
 * `#[tailcall]` does not support `async fn` or `const fn`.
-* Each deferred closure is stored in a fixed-size inline slot (~16 bytes).
-  Closures that exceed that size panic when the `Thunk` is constructed.
+* Each deferred closure is stored in a fixed-size inline slot.
+  By default that budget is about 16 bytes on 64-bit targets; optional features can increase it
+  by making `Thunk` itself larger.
 
 
 ## Development

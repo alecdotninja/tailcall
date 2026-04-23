@@ -13,3 +13,8 @@ edition.workspace = true
 
 [dependencies]
 tailcall_proc_macro = { package = "tailcall-impl", path = "../tailcall-proc-macro", version = "2.2.2" }
+
+[features]
+default = []
+at-least-inline-captures-32 = []
+at-least-inline-captures-48 = ["at-least-inline-captures-32"]

@@ -60,8 +60,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
-      - name: Run tests
+      - name: Run default tests
         run: cargo test --all
+      - name: Run tailcall tests with at-least-inline-captures-32
+        run: cargo test -p tailcall --features at-least-inline-captures-32
+      - name: Run tailcall tests with at-least-inline-captures-48
+        run: cargo test -p tailcall --features at-least-inline-captures-48
 
   test_miri:
     name: 🔬 Miri

@@ -7,9 +7,9 @@
 //! A [`Thunk`] may hold either the value directly or a type-erased closure that will eventually
 //! produce the value.
 //!
-//! On 64-bit targets, the current runtime keeps [`Thunk`] at 32 bytes. It does that by storing
-//! deferred closures in a small inline slot, so large captures are rejected by panicking when the
-//! [`Thunk`] is constructed.
+//! On 64-bit targets, the default runtime keeps [`Thunk`] at 32 bytes. Optional crate features
+//! can opt into larger [`Thunk`] sizes to support larger inline captures. If a closure still
+//! exceeds the configured inline budget, [`Thunk`] construction panics.
 //!
 //! Pending [`Thunk`] values still preserve normal destructor-on-drop behavior for anything they
 //! capture.

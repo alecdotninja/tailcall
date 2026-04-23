@@ -17,4 +17,5 @@ quote = "~1"
 syn = { version = "2.0.117", features = ["full", "fold", "visit"] }
 
 [lib]
+name = "tailcall_proc_macro"
 proc-macro = true

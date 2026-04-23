@@ -173,7 +173,7 @@ impl Parity {
 
 ### Mixed Recursion
 
-Only `tailcall::call!` sites are trampoline-backed:
+Only `tailcall::call!` sites participate in the tailcall transform:
 
 ```rust
 use tailcall::tailcall;
@@ -276,7 +276,8 @@ fn build(n: u64) -> Thunk<'static, u64> {
 The workspace is split by responsibility:
 
 * `tailcall`: the published runtime crate and its runtime-internal unit tests.
-* `tailcall-impl`: the published proc-macro crate and its analyzer/expansion unit tests.
+* `tailcall-proc-macro`: the proc-macro crate directory in this repo.
+  The published package name remains `tailcall-impl`.
 * `std-integration`: downstream `std` integration tests and benchmarks that exercise the public API.
 * `no-std-integration`: downstream `#![no_std]` integration tests for the public API.
 
@@ -297,9 +298,9 @@ cargo bench -p std-integration --no-run
 
 ## Publishing
 
-`tailcall` and `tailcall-impl` are released together.
+`tailcall` and the proc-macro package `tailcall-impl` are released together.
 
-1. Update the versions in `tailcall/Cargo.toml` and `tailcall-impl/Cargo.toml`.
+1. Update the versions in `tailcall/Cargo.toml` and `tailcall-proc-macro/Cargo.toml`.
 2. Run the release checks:
 
 ```bash
@@ -309,7 +310,7 @@ cargo doc --no-deps
 ```
 
 3. Commit the release version bump.
-4. Publish `tailcall-impl` first:
+4. Publish the proc-macro package first:
 
 ```bash
 cargo publish -p tailcall-impl

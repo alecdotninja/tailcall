@@ -5,7 +5,7 @@ members = [
     "no-std-integration",
     "std-integration",
     "tailcall",
-    "tailcall-impl",
+    "tailcall-proc-macro",
 ]
 
 [workspace.package]

@@ -12,4 +12,4 @@ version = "2.2.1"
 edition.workspace = true
 
 [dependencies]
-tailcall-impl = { path = "../tailcall-impl", version = "2.2.1" }
+tailcall_proc_macro = { package = "tailcall-impl", path = "../tailcall-proc-macro", version = "2.2.1" }

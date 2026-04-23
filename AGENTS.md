@@ -9,8 +9,9 @@ The workspace is intentionally split by responsibility:
 - `tailcall`
   - Published runtime crate.
   - Owns runtime implementation and runtime-internal unit tests.
-- `tailcall-impl`
-  - Published proc-macro crate.
+- `tailcall-proc-macro`
+  - Proc-macro crate directory in this repo.
+  - Published package name remains `tailcall-impl`.
   - Owns macro analysis, lowering, expansion, and proc-macro unit tests.
 - `std-integration`
   - Non-published downstream `std` crate.
@@ -52,7 +53,7 @@ Keep tests here only for runtime internals:
 - panic message behavior for runtime internals
 - other private implementation details
 
-### `tailcall-impl/src/...`
+### `tailcall-proc-macro/src/...`
 
 Keep tests here only for proc-macro internals:
 
@@ -127,7 +128,7 @@ Keep new changes compatible with those checks unless the workflow is intentional
 Only the published crates carry release versions:
 
 - `tailcall/Cargo.toml`
-- `tailcall-impl/Cargo.toml`
+- `tailcall-proc-macro/Cargo.toml`
 
 The root workspace manifest does not own the crate version anymore.
 
@@ -135,7 +136,7 @@ When doing a release:
 
 1. Update versions in:
    - `tailcall/Cargo.toml`
-   - `tailcall-impl/Cargo.toml`
+   - `tailcall-proc-macro/Cargo.toml`
 2. Run release checks:
    - `cargo test`
    - `cargo test --doc`
@@ -145,7 +146,7 @@ When doing a release:
 5. Publish `tailcall` second.
 6. Tag and push the release commit.
 
-`tailcall` depends on `tailcall-impl` by explicit path + version, so both crate versions must stay aligned for release.
+`tailcall` depends on the published proc-macro package `tailcall-impl` by explicit path + version, so both crate versions must stay aligned for release.
 
 ## Documentation / README Conventions
 
@@ -160,6 +161,6 @@ When updating docs:
 ## Notes For Future Changes
 
 - If a change only affects runtime internals, prefer runtime unit tests over new integration tests.
-- If a change only affects macro expansion shape, prefer `tailcall-impl` unit tests.
+- If a change only affects macro expansion shape, prefer `tailcall-proc-macro` unit tests.
 - If a change affects how downstream users write or run recursive code, prefer integration coverage.
 - Be cautious with tests that depend on compiler-specific closure layout details; those can be brittle across toolchains.

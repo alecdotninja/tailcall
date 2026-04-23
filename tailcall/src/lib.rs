@@ -102,7 +102,8 @@
 //! ```
 //!
 //! Mixed recursion is also allowed within a `#[tailcall]` function. A recursive call written with
-//! [`call!`] is trampoline-backed, while a plain recursive call remains an ordinary Rust call:
+//! [`call!`] is handled by the tailcall transform, while a plain recursive call remains an
+//! ordinary Rust call:
 //!
 //! ```rust
 //! use tailcall::tailcall;
@@ -304,8 +305,8 @@
 //! - `?` is not supported inside `#[tailcall]` functions on stable Rust; use `match` or explicit
 //!   early returns instead
 //! - trait methods are not supported yet
-//! - mixed recursion is allowed, but only `tailcall::call!` sites are trampoline-backed; plain
-//!   recursive calls still use the native call stack
+//! - mixed recursion is allowed, but only `tailcall::call!` sites participate in the tailcall
+//!   transform; plain recursive calls still use the native call stack
 //! - each generated helper is backed by a [`Thunk`], so very large argument lists or captures can
 //!   exceed the 16-byte deferred-closure budget
 //!
@@ -324,6 +325,6 @@
 )]
 
 pub use runtime::Thunk;
-pub use tailcall_impl::{call, tailcall};
+pub use tailcall_proc_macro::{call, tailcall};
 
 pub mod runtime;

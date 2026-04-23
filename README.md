@@ -69,9 +69,7 @@ This turns recursion into iteration under the hood.
 A common alternative for stack-safe recursion in Rust is to box each step. That can offer a similar
 interface, but it introduces allocation and indirection on every recursive step.
 
-`tailcall` keeps each step inline instead, so the main cost is:
-
-* an extra indirect call per `Thunk::bounce` step
+`tailcall` keeps each step inline instead, so the main cost is an extra indirect call per `Thunk::bounce` step.
 
 In some cases, that cost disappears entirely. If a simple free function or inherent method only
 tail-calls itself directly, `#[tailcall]` can lower it to an inline `loop`.

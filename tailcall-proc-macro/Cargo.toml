@@ -8,7 +8,7 @@ keywords.workspace = true
 categories.workspace = true
 license.workspace = true
 authors.workspace = true
-version = "2.2.1"
+version = "2.2.2"
 edition.workspace = true
 
 [dependencies]

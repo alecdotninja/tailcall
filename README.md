@@ -273,6 +273,16 @@ fn build(n: u64) -> Thunk<'static, u64> {
 
 ## Development
 
+The workspace is split by responsibility:
+
+* `tailcall`: the published runtime crate and its runtime-internal unit tests.
+* `tailcall-impl`: the published proc-macro crate and its analyzer/expansion unit tests.
+* `std-integration`: downstream `std` integration tests and benchmarks that exercise the public API.
+* `no-std-integration`: downstream `#![no_std]` integration tests for the public API.
+
+This repo pins its toolchain in `rust-toolchain.toml`, so plain `cargo` commands run against the
+expected Rust version for local development and CI.
+
 For normal development, the main local checks are:
 
 ```bash
@@ -282,17 +292,15 @@ cargo +nightly miri test --all
 cargo fmt --all -- --check
 cargo clippy --all
 cargo doc --no-deps
+cargo bench -p std-integration --no-run
 ```
-
-If you are changing the public docs or runtime internals, it is also worth doing a quick end-to-end smoke test from a fresh crate that depends on the published version from crates.io.
-
 
 ## Publishing
 
 `tailcall` and `tailcall-impl` are released together.
 
 1. Update the shared workspace version in `Cargo.toml`.
-   Also update the matching `tailcall` and `tailcall-impl` entries in `[workspace.dependencies]`.
+   Also update the versions in `tailcall/Cargo.toml` and `tailcall-impl/Cargo.toml`.
 2. Run the release checks:
 
 ```bash

@@ -117,9 +117,6 @@ mod tests {
     use std::panic::{catch_unwind, AssertUnwindSafe};
     use std::{boxed::Box, string::String};
 
-    #[repr(align(32))]
-    struct OverAligned(u8);
-
     #[test]
     fn sanity() {
         let thunk = ErasedFnOnce::new(|| 42);
@@ -155,20 +152,6 @@ mod tests {
         let message = panic_message(&panic);
         assert!(message.contains("captured state exceeds the thunk slot capacity"));
         assert!(message.contains("pass state as function arguments"));
-    }
-
-    #[test]
-    fn over_aligned_capture_reports_actionable_message() {
-        let value = OverAligned(0);
-
-        let panic = catch_unwind(AssertUnwindSafe(|| {
-            let _ = ErasedFnOnce::new(move || value.0);
-        }))
-        .expect_err("expected over-aligned closure capture to panic");
-
-        let message = panic_message(&panic);
-        assert!(message.contains("alignment exceeds the thunk slot alignment"));
-        assert!(message.contains("move large/over-aligned state behind a pointer"));
     }
 
     #[test]

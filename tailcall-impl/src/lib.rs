@@ -164,16 +164,19 @@ use syn::{parse_macro_input, ImplItemFn, ItemFn};
 pub fn tailcall(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
     let tokens_clone = tokens.clone();
 
-    let output = if let Ok(input) = syn::parse::<ImplItemFn>(tokens) {
-        if matches!(input.sig.inputs.first(), Some(syn::FnArg::Receiver(_))) {
-            expand::apply_method_tailcall_transform(input)
-        } else {
+    let output = match syn::parse::<ImplItemFn>(tokens) {
+        Ok(input) => {
+            if matches!(input.sig.inputs.first(), Some(syn::FnArg::Receiver(_))) {
+                expand::apply_method_tailcall_transform(input)
+            } else {
+                let input = parse_macro_input!(tokens_clone as ItemFn);
+                expand::apply_fn_tailcall_transform(input)
+            }
+        }
+        _ => {
             let input = parse_macro_input!(tokens_clone as ItemFn);
             expand::apply_fn_tailcall_transform(input)
         }
-    } else {
-        let input = parse_macro_input!(tokens_clone as ItemFn);
-        expand::apply_fn_tailcall_transform(input)
     };
 
     TokenStream::from(output)

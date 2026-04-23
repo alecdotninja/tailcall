@@ -1,5 +1,5 @@
 [package]
-name = "no-std-smoke"
+name = "no-std-integration"
 version = "0.0.0"
 edition.workspace = true
 publish = false

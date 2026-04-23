@@ -1,4 +1,4 @@
-use bencher::*;
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::boxed::Box;
 use tailcall::*;
 
@@ -127,10 +127,6 @@ fn is_odd_rec(x: u128) -> bool {
     is_odd_rec_go(x, false)
 }
 
-fn is_odd_rec_thunk(x: u128) -> bool {
-    __tailcall_build_is_odd_rec_go_thunk(x, false).call()
-}
-
 #[tailcall]
 fn is_odd_rec_res_go(x: u64, odd: Result<bool, ()>) -> Result<bool, ()> {
     if x > 0 {
@@ -181,75 +177,83 @@ fn is_odd_mutrec(x: u128) -> bool {
 const ODD_TEST_NUM: u128 = 1000000;
 const SCRAMBLE_TEST_NUM: u64 = 1_000_000;
 
-fn bench_oddness_loop(b: &mut Bencher) {
+fn bench_oddness_loop(c: &mut Criterion) {
     let mut val: u128 = ODD_TEST_NUM;
-    b.iter(|| {
-        black_box(is_odd_loop(black_box(val)));
-        val += 1;
+    c.bench_function("oddness_loop", |b| {
+        b.iter(|| {
+            black_box(is_odd_loop(black_box(val)));
+            val += 1;
+        })
     });
 }
 
-fn bench_oddness_enum_dispatch(b: &mut Bencher) {
+fn bench_oddness_enum_dispatch(c: &mut Criterion) {
     let mut val: u128 = ODD_TEST_NUM;
-    b.iter(|| {
-        black_box(is_odd_enum_dispatch(black_box(val)));
-        val += 1;
+    c.bench_function("oddness_enum_dispatch", |b| {
+        b.iter(|| {
+            black_box(is_odd_enum_dispatch(black_box(val)));
+            val += 1;
+        })
     });
 }
 
-fn bench_oddness_runtime(b: &mut Bencher) {
+fn bench_oddness_runtime(c: &mut Criterion) {
     let mut val: u128 = ODD_TEST_NUM;
-    b.iter(|| {
-        black_box(is_odd_runtime(black_box(val)));
-        val += 1;
+    c.bench_function("oddness_runtime", |b| {
+        b.iter(|| {
+            black_box(is_odd_runtime(black_box(val)));
+            val += 1;
+        })
     });
 }
 
-fn bench_oddness_box_runtime(b: &mut Bencher) {
+fn bench_oddness_box_runtime(c: &mut Criterion) {
     let mut val: u128 = ODD_TEST_NUM;
-    b.iter(|| {
-        black_box(is_odd_box_runtime(black_box(val)));
-        val += 1;
+    c.bench_function("oddness_box_runtime", |b| {
+        b.iter(|| {
+            black_box(is_odd_box_runtime(black_box(val)));
+            val += 1;
+        })
     });
 }
 
-fn bench_oddness_tailcall_optimized(b: &mut Bencher) {
+fn bench_oddness_tailcall_optimized(c: &mut Criterion) {
     let mut val: u128 = ODD_TEST_NUM;
-    b.iter(|| {
-        black_box(is_odd_rec(black_box(val)));
-        val += 1;
+    c.bench_function("oddness_tailcall_optimized", |b| {
+        b.iter(|| {
+            black_box(is_odd_rec(black_box(val)));
+            val += 1;
+        })
     });
 }
 
-fn bench_oddness_tailcall_thunk_builder(b: &mut Bencher) {
-    let mut val: u128 = ODD_TEST_NUM;
-    b.iter(|| {
-        black_box(is_odd_rec_thunk(black_box(val)));
-        val += 1;
-    });
-}
-
-fn bench_oddness_res_rec(b: &mut Bencher) {
+fn bench_oddness_res_rec(c: &mut Criterion) {
     let mut val: u64 = ODD_TEST_NUM as u64;
-    b.iter(|| {
-        black_box(is_odd_res_rec(black_box(val)));
-        val += 1;
+    c.bench_function("oddness_result_tailcall", |b| {
+        b.iter(|| {
+            black_box(is_odd_res_rec(black_box(val)));
+            val += 1;
+        })
     });
 }
 
-fn bench_oddness_boom(b: &mut Bencher) {
+fn bench_oddness_boom(c: &mut Criterion) {
     let mut val: u128 = ODD_TEST_NUM;
-    b.iter(|| {
-        black_box(is_odd_boom(black_box(val)));
-        val += 1;
+    c.bench_function("oddness_plain_recursion", |b| {
+        b.iter(|| {
+            black_box(is_odd_boom(black_box(val)));
+            val += 1;
+        })
     });
 }
 
-fn bench_oddness_mutrec(b: &mut Bencher) {
+fn bench_oddness_mutrec(c: &mut Criterion) {
     let mut val: u128 = ODD_TEST_NUM;
-    b.iter(|| {
-        black_box(is_odd_mutrec(black_box(val)));
-        val += 1;
+    c.bench_function("oddness_mutual_tailcall", |b| {
+        b.iter(|| {
+            black_box(is_odd_mutrec(black_box(val)));
+            val += 1;
+        })
     });
 }
 
@@ -306,81 +310,72 @@ fn scramble_tailcall(n: u64, state: u64) -> u64 {
     scramble_tailcall_go(n, state)
 }
 
-fn scramble_tailcall_thunk(n: u64, state: u64) -> u64 {
-    __tailcall_build_scramble_tailcall_go_thunk(n, state).call()
-}
-
-fn bench_scramble_loop(b: &mut Bencher) {
+fn bench_scramble_loop(c: &mut Criterion) {
     let mut val = SCRAMBLE_TEST_NUM;
-    b.iter(|| {
-        black_box(scramble_loop(
-            black_box(val),
-            black_box(0xDEAD_BEEF_DEAD_BEEF),
-        ));
-        val += 1;
+    c.bench_function("scramble_loop", |b| {
+        b.iter(|| {
+            black_box(scramble_loop(
+                black_box(val),
+                black_box(0xDEAD_BEEF_DEAD_BEEF),
+            ));
+            val += 1;
+        })
     });
 }
 
-fn bench_scramble_runtime(b: &mut Bencher) {
+fn bench_scramble_runtime(c: &mut Criterion) {
     let mut val = SCRAMBLE_TEST_NUM;
-    b.iter(|| {
-        black_box(scramble_runtime(
-            black_box(val),
-            black_box(0xDEAD_BEEF_DEAD_BEEF),
-        ));
-        val += 1;
+    c.bench_function("scramble_runtime", |b| {
+        b.iter(|| {
+            black_box(scramble_runtime(
+                black_box(val),
+                black_box(0xDEAD_BEEF_DEAD_BEEF),
+            ));
+            val += 1;
+        })
     });
 }
 
-fn bench_scramble_box_runtime(b: &mut Bencher) {
+fn bench_scramble_box_runtime(c: &mut Criterion) {
     let mut val = SCRAMBLE_TEST_NUM;
-    b.iter(|| {
-        black_box(scramble_box_runtime(
-            black_box(val),
-            black_box(0xDEAD_BEEF_DEAD_BEEF),
-        ));
-        val += 1;
+    c.bench_function("scramble_box_runtime", |b| {
+        b.iter(|| {
+            black_box(scramble_box_runtime(
+                black_box(val),
+                black_box(0xDEAD_BEEF_DEAD_BEEF),
+            ));
+            val += 1;
+        })
     });
 }
 
-fn bench_scramble_tailcall_optimized(b: &mut Bencher) {
+fn bench_scramble_tailcall_optimized(c: &mut Criterion) {
     let mut val = SCRAMBLE_TEST_NUM;
-    b.iter(|| {
-        black_box(scramble_tailcall(
-            black_box(val),
-            black_box(0xDEAD_BEEF_DEAD_BEEF),
-        ));
-        val += 1;
+    c.bench_function("scramble_tailcall_optimized", |b| {
+        b.iter(|| {
+            black_box(scramble_tailcall(
+                black_box(val),
+                black_box(0xDEAD_BEEF_DEAD_BEEF),
+            ));
+            val += 1;
+        })
     });
 }
 
-fn bench_scramble_tailcall_thunk_builder(b: &mut Bencher) {
-    let mut val = SCRAMBLE_TEST_NUM;
-    b.iter(|| {
-        black_box(scramble_tailcall_thunk(
-            black_box(val),
-            black_box(0xDEAD_BEEF_DEAD_BEEF),
-        ));
-        val += 1;
-    });
-}
-
-benchmark_group!(
+criterion_group!(
     benches,
     bench_oddness_loop,
     bench_oddness_enum_dispatch,
     bench_oddness_runtime,
     bench_oddness_box_runtime,
     bench_oddness_tailcall_optimized,
-    bench_oddness_tailcall_thunk_builder,
     bench_oddness_res_rec,
     bench_oddness_boom,
     bench_oddness_mutrec,
     bench_scramble_loop,
     bench_scramble_runtime,
     bench_scramble_box_runtime,
-    bench_scramble_tailcall_optimized,
-    bench_scramble_tailcall_thunk_builder
+    bench_scramble_tailcall_optimized
 );
 
-benchmark_main!(benches);
+criterion_main!(benches);

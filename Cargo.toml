@@ -1,8 +1,9 @@
 [workspace]
+resolver = "2"
 
 members = [
-    "no-std-smoke",
-    "std-smoke",
+    "no-std-integration",
+    "std-integration",
     "tailcall",
     "tailcall-impl",
 ]
@@ -16,13 +17,4 @@ keywords = ["recursion", "tail", "tailcall", "become"]
 categories = ["algorithms", "no-std"]
 license = "MIT OR Apache-2.0"
 authors = ["Alec Larsen <hello@alec.ninja>"]
-edition = "2018"
-
-# ⚠️ Warning! When updating the version here, you must also update the version
-# in the `workspace.dependencies` section of this file for the `tailcall` and
-# `tailcall-impl` crates.
-version = "2.2.1"
-
-[workspace.dependencies]
-tailcall = { path = "tailcall", version = "2.2.1" }
-tailcall-impl = { path = "tailcall-impl", version = "2.2.1" }
+edition = "2021"

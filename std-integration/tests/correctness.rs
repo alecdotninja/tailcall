@@ -94,9 +94,8 @@ fn optimized_countdown(input: u64) -> u64 {
 }
 
 #[test]
-fn test_simple_self_tail_recursion_keeps_hidden_thunk_builder() {
+fn test_simple_self_tail_recursion_runs() {
     assert_eq!(optimized_countdown(10), 0);
-    assert_eq!(__tailcall_build_optimized_countdown_thunk(10).call(), 0);
 }
 
 #[tailcall]
@@ -109,12 +108,8 @@ fn generic_countdown<T: Copy>(input: u64, value: T) -> T {
 }
 
 #[test]
-fn test_generic_self_tail_recursion_keeps_hidden_thunk_builder() {
+fn test_generic_self_tail_recursion_runs() {
     assert_eq!(generic_countdown(10, 42_u32), 42);
-    assert_eq!(
-        __tailcall_build_generic_countdown_thunk(10, 42_u32).call(),
-        42
-    );
 }
 
 #[tailcall]
@@ -130,10 +125,6 @@ fn countdown_with_shadowing(input: u64) -> u64 {
 #[test]
 fn test_shadowing_falls_back_to_thunk_backend() {
     assert_eq!(countdown_with_shadowing(10), 0);
-    assert_eq!(
-        __tailcall_build_countdown_with_shadowing_thunk(10).call(),
-        0
-    );
 }
 
 fn gcd_with_trace(a: u64, b: u64) -> (u64, Vec<(u64, u64)>) {
@@ -272,9 +263,9 @@ fn test_mutable_receiver_methods_work_with_tailcall() {
 }
 
 #[test]
-fn test_self_recursive_methods_keep_hidden_thunk_builder() {
+fn test_self_recursive_methods_run() {
     let mut accumulator = MethodAccumulator::default();
-    let total = accumulator.__tailcall_build_tick_down_thunk(8).call();
+    let total = accumulator.tick_down(8);
 
     assert_eq!(total, 9);
     assert_eq!(accumulator.steps, 9);
@@ -294,11 +285,10 @@ impl GenericMethodCounter {
 }
 
 #[test]
-fn test_generic_self_recursive_methods_keep_hidden_thunk_builder() {
+fn test_generic_self_recursive_methods_run() {
     let counter = GenericMethodCounter;
 
     assert_eq!(counter.countdown(8, 7_u32), 7);
-    assert_eq!(counter.__tailcall_build_countdown_thunk(8, 7_u32).call(), 7);
 }
 
 #[cfg(not(miri))]

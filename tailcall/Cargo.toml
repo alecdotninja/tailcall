@@ -8,16 +8,8 @@ keywords.workspace = true
 categories.workspace = true
 license.workspace = true
 authors.workspace = true
-version.workspace = true
+version = "2.2.1"
 edition.workspace = true
 
 [dependencies]
-tailcall-impl = { workspace = true }
-
-[dev-dependencies]
-backtrace = "~0.3"
-bencher = "~0.1"
-
-[[bench]]
-name = "bench"
-harness = false
+tailcall-impl = { path = "../tailcall-impl", version = "2.2.1" }

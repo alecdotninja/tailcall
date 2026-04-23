@@ -19,6 +19,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - name: Run benchmarks
         run: cargo bench --all
 
@@ -28,6 +29,7 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - name: Build (release)
         run: cargo build --all --release
 
@@ -37,6 +39,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - name: Run Rustfmt
         run: cargo fmt --all -- --check
 
@@ -46,6 +49,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - name: Run Clippy
         run: cargo clippy --all
 
@@ -55,6 +59,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - name: Run tests
         run: cargo test --all
 
@@ -64,6 +69,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
       - name: Setup Miri
         run: |
           rustup toolchain install nightly \
@@ -75,3 +81,15 @@ jobs:
         env:
           MIRIFLAGS: -Zmiri-strict-provenance -Zmiri-symbolic-alignment-check
         run: cargo +nightly miri test --all
+
+  doc:
+    name: 📚 Documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Build docs
+        env:
+          RUSTDOCFLAGS: -Dwarnings
+        run: cargo doc --no-deps --all

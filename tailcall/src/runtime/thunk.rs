@@ -51,10 +51,11 @@ impl<'a, T> Thunk<'a, T> {
     }
 
     /// Resolves the deferred computation to a final value.
+    #[inline(always)]
     pub fn call(mut self) -> T {
         loop {
             match self.0 {
-                ThunkKind::Bounce(thunk) => self = thunk.call(),
+                ThunkKind::Bounce(erased_fn_once) => self = erased_fn_once.call(),
                 ThunkKind::Done(value) => return value,
             }
         }

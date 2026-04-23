@@ -31,10 +31,11 @@ impl TailPositionRewriter {
 
         if let Some(stmt) = last_stmt {
             block.stmts.push(match stmt {
-                Stmt::Expr(expr) => Stmt::Expr(self.rewrite_tail_expr(expr)),
-                Stmt::Semi(expr, semi) => Stmt::Semi(self.fold_expr(expr), semi),
+                Stmt::Expr(expr, None) => Stmt::Expr(self.rewrite_tail_expr(expr), None),
+                Stmt::Expr(expr, semi) => Stmt::Expr(self.fold_expr(expr), semi),
                 Stmt::Local(local) => Stmt::Local(self.fold_local(local)),
                 Stmt::Item(item) => Stmt::Item(item),
+                Stmt::Macro(stmt_macro) => Stmt::Macro(stmt_macro),
             });
         }
 

@@ -3,8 +3,8 @@ use quote::quote;
 use syn::{
     fold::{self, Fold},
     parse2, parse_quote, Error, Expr, ExprBlock, ExprCall, ExprIf, ExprMacro, ExprMatch,
-    ExprMethodCall, ExprPath, ExprReturn, ExprTry, FnArg, Ident, ImplItemMethod, Item, ItemFn,
-    ItemMacro, Pat, PatIdent, PatType, Stmt,
+    ExprMethodCall, ExprPath, ExprReturn, ExprTry, FnArg, Ident, ImplItemFn, Item, ItemFn,
+    Pat, PatIdent, PatType, Stmt, StmtMacro,
 };
 
 use crate::call_syntax::is_tailcall_macro;
@@ -27,7 +27,7 @@ pub fn lower_self_tail_loop(item_fn: &ItemFn) -> Result<TokenStream, Error> {
     }
 }
 
-pub fn lower_self_tail_method_loop(method: &ImplItemMethod) -> Result<TokenStream, Error> {
+pub fn lower_self_tail_method_loop(method: &ImplItemFn) -> Result<TokenStream, Error> {
     let arg_idents = function_arg_idents(&method.sig.inputs)?;
     let receiver_alias = Ident::new("__tailcall_self", Span::call_site());
     let mut lowerer = LoopLowerer::for_method(
@@ -122,12 +122,11 @@ impl LoopLowerer {
 
         if let Some(stmt) = last_stmt {
             block.stmts.push(match stmt {
-                Stmt::Expr(expr) => Stmt::Expr(self.lower_tail_expr(expr)),
-                Stmt::Semi(expr, semi) => Stmt::Semi(self.fold_expr(expr), semi),
+                Stmt::Expr(expr, None) => Stmt::Expr(self.lower_tail_expr(expr), None),
+                Stmt::Expr(expr, semi) => Stmt::Expr(self.fold_expr(expr), semi),
                 Stmt::Local(local) => Stmt::Local(self.fold_local(local)),
-                Stmt::Item(Item::Macro(item_macro)) => {
-                    Stmt::Expr(self.lower_tail_item_macro(item_macro))
-                }
+                Stmt::Item(Item::Macro(item_macro)) => Stmt::Item(Item::Macro(item_macro)),
+                Stmt::Macro(stmt_macro) => Stmt::Expr(self.lower_tail_stmt_macro(stmt_macro), None),
                 Stmt::Item(item) => Stmt::Item(item),
             });
         }
@@ -298,16 +297,16 @@ impl LoopLowerer {
         })
     }
 
-    fn lower_tail_item_macro(&mut self, item_macro: ItemMacro) -> Expr {
-        if is_tailcall_macro(&item_macro.mac.path) {
+    fn lower_tail_stmt_macro(&mut self, stmt_macro: StmtMacro) -> Expr {
+        if is_tailcall_macro(&stmt_macro.mac.path) {
             return self.lower_self_tailcall(ExprMacro {
-                attrs: item_macro.attrs,
-                mac: item_macro.mac,
+                attrs: stmt_macro.attrs,
+                mac: stmt_macro.mac,
             });
         }
 
         self.reject(Error::new_spanned(
-            item_macro,
+            stmt_macro,
             "tail-position macro items are not supported in loop lowering",
         ));
         parse_quote! { continue }
@@ -426,7 +425,7 @@ mod tests {
 
     #[test]
     fn lowers_simple_self_tail_recursive_method() {
-        let method: syn::ImplItemMethod = parse_quote! {
+        let method: syn::ImplItemFn = parse_quote! {
             fn countdown(&self, n: u32) -> u32 {
                 if n > 0 {
                     tailcall::call! { self.countdown(n - 1) }

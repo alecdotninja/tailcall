@@ -25,7 +25,7 @@ mod rewrite;
 mod signature;
 
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, ImplItemMethod, ItemFn};
+use syn::{parse_macro_input, ImplItemFn, ItemFn};
 
 /// Transforms a [function definition] so that all recursive calls within the body are
 /// guaranteed to use a single stack frame (via [tail recursion]).
@@ -164,7 +164,7 @@ use syn::{parse_macro_input, ImplItemMethod, ItemFn};
 pub fn tailcall(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
     let tokens_clone = tokens.clone();
 
-    let output = if let Ok(input) = syn::parse::<ImplItemMethod>(tokens) {
+    let output = if let Ok(input) = syn::parse::<ImplItemFn>(tokens) {
         if matches!(input.sig.inputs.first(), Some(syn::FnArg::Receiver(_))) {
             expand::apply_method_tailcall_transform(input)
         } else {

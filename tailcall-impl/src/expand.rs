@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Error, ImplItemMethod, ItemFn, Signature};
+use syn::{Error, ImplItemFn, ItemFn, Signature};
 
 use crate::{
     analyze::{is_simple_self_tail_recursive, is_simple_self_tail_recursive_method},
@@ -16,7 +16,7 @@ pub fn apply_fn_tailcall_transform(item_fn: ItemFn) -> TokenStream {
     }
 }
 
-pub fn apply_method_tailcall_transform(method: ImplItemMethod) -> TokenStream {
+pub fn apply_method_tailcall_transform(method: ImplItemFn) -> TokenStream {
     match TailcallMethodTransform::new(method).expand() {
         Ok(output) => output,
         Err(error) => error.to_compile_error(),
@@ -28,16 +28,16 @@ struct TailcallTransform {
 }
 
 struct TailcallMethodTransform {
-    method: ImplItemMethod,
+    method: ImplItemFn,
 }
 
 impl TailcallMethodTransform {
-    fn new(method: ImplItemMethod) -> Self {
+    fn new(method: ImplItemFn) -> Self {
         Self { method }
     }
 
     fn expand(self) -> Result<TokenStream, Error> {
-        let ImplItemMethod {
+        let ImplItemFn {
             attrs,
             vis,
             defaultness,
@@ -50,7 +50,7 @@ impl TailcallMethodTransform {
         let helper_sig = method_helper_signature(&sig)?;
         let helper_fn_ident = &helper_sig.ident;
         let helper_args = function_argument_exprs(&sig)?;
-        let original_method = ImplItemMethod {
+        let original_method = ImplItemFn {
             attrs: attrs.clone(),
             vis: vis.clone(),
             defaultness,
@@ -256,7 +256,7 @@ mod tests {
 
     #[test]
     fn expands_loop_lowered_method_as_expected() {
-        let method: syn::ImplItemMethod = parse_quote! {
+        let method: syn::ImplItemFn = parse_quote! {
             fn countdown(&mut self, n: u32) -> u32 {
                 self.steps += 1;
 

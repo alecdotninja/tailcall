@@ -1,8 +1,8 @@
 use syn::{
     parse2,
     visit::{self, Visit},
-    Expr, ExprCall, ExprMacro, ExprMethodCall, ExprPath, FnArg, Ident, ImplItemMethod, ItemFn,
-    ItemMacro, Pat, PatIdent, PatType, Path,
+    Expr, ExprCall, ExprMacro, ExprMethodCall, ExprPath, FnArg, Ident, ImplItemFn, ItemFn,
+    ItemMacro, Pat, PatIdent, PatType, Path, StmtMacro,
 };
 
 use crate::call_syntax::is_tailcall_macro;
@@ -12,7 +12,7 @@ pub fn is_simple_self_tail_recursive(item_fn: &ItemFn) -> bool {
     eligible && saw_self_tailcall
 }
 
-pub fn is_simple_self_tail_recursive_method(method: &ImplItemMethod) -> bool {
+pub fn is_simple_self_tail_recursive_method(method: &ImplItemFn) -> bool {
     let (eligible, saw_self_tailcall) = analyze_method(method);
     eligible && saw_self_tailcall
 }
@@ -28,7 +28,7 @@ fn analyze(item_fn: &ItemFn) -> (bool, bool) {
     (analyzer.eligible, analyzer.saw_self_tailcall)
 }
 
-fn analyze_method(method: &ImplItemMethod) -> (bool, bool) {
+fn analyze_method(method: &ImplItemFn) -> (bool, bool) {
     let mut analyzer = SelfTailMethodAnalyzer {
         method_ident: &method.sig.ident,
         arg_idents: function_arg_idents(&method.sig.inputs),
@@ -144,6 +144,27 @@ impl<'ast> Visit<'ast> for SelfTailAnalyzer<'_> {
         visit::visit_expr_macro(self, expr_macro);
     }
 
+    fn visit_stmt_macro(&mut self, stmt_macro: &'ast StmtMacro) {
+        if !self.eligible {
+            return;
+        }
+
+        if is_tailcall_macro(&stmt_macro.mac.path) {
+            match parse2::<ExprCall>(stmt_macro.mac.tokens.clone()) {
+                Ok(expr_call) => match &*expr_call.func {
+                    Expr::Path(ExprPath { path, .. }) if self.is_self_path(path) => {
+                        self.saw_self_tailcall = true;
+                    }
+                    _ => self.eligible = false,
+                },
+                Err(_) => self.eligible = false,
+            }
+            return;
+        }
+
+        visit::visit_stmt_macro(self, stmt_macro);
+    }
+
     fn visit_expr_call(&mut self, expr_call: &'ast ExprCall) {
         if !self.eligible {
             return;
@@ -218,6 +239,27 @@ impl<'ast> Visit<'ast> for SelfTailMethodAnalyzer<'_> {
         }
 
         visit::visit_expr_macro(self, expr_macro);
+    }
+
+    fn visit_stmt_macro(&mut self, stmt_macro: &'ast StmtMacro) {
+        if !self.eligible {
+            return;
+        }
+
+        if is_tailcall_macro(&stmt_macro.mac.path) {
+            match parse2::<ExprMethodCall>(stmt_macro.mac.tokens.clone()) {
+                Ok(expr_method_call)
+                    if self.is_self_receiver(&expr_method_call.receiver)
+                        && expr_method_call.method == *self.method_ident =>
+                {
+                    self.saw_self_tailcall = true;
+                }
+                Ok(_) | Err(_) => self.eligible = false,
+            }
+            return;
+        }
+
+        visit::visit_stmt_macro(self, stmt_macro);
     }
 
     fn visit_expr_method_call(&mut self, expr_method_call: &'ast ExprMethodCall) {
@@ -325,21 +367,21 @@ mod tests {
             }
         };
 
-        let syn::Stmt::Expr(syn::Expr::If(expr_if)) = &item_fn.block.stmts[0] else {
+        let syn::Stmt::Expr(syn::Expr::If(expr_if), _) = &item_fn.block.stmts[0] else {
             panic!("expected top-level if expression");
         };
         assert_eq!(expr_if.then_branch.stmts.len(), 1);
-        let item_macro = match &expr_if.then_branch.stmts[0] {
-            syn::Stmt::Item(syn::Item::Macro(item_macro)) => item_macro,
-            _ => panic!("expected tailcall macro item in then branch"),
+        let stmt_macro = match &expr_if.then_branch.stmts[0] {
+            syn::Stmt::Macro(stmt_macro) => stmt_macro,
+            _ => panic!("expected tailcall macro statement in then branch"),
         };
 
-        assert!(is_tailcall_macro(&item_macro.mac.path));
+        assert!(is_tailcall_macro(&stmt_macro.mac.path));
     }
 
     #[test]
     fn accepts_simple_self_tail_recursive_method() {
-        let method: syn::ImplItemMethod = parse_quote! {
+        let method: syn::ImplItemFn = parse_quote! {
             fn countdown(&self, n: u32) -> u32 {
                 if n > 0 {
                     tailcall::call! { self.countdown(n - 1) }
@@ -355,7 +397,7 @@ mod tests {
 
     #[test]
     fn rejects_shadowing_parameter_bindings_in_methods() {
-        let method: syn::ImplItemMethod = parse_quote! {
+        let method: syn::ImplItemFn = parse_quote! {
             fn countdown(&self, input: u32) -> u32 {
                 let input = input - 1;
                 tailcall::call! { self.countdown(input) }
@@ -400,7 +442,7 @@ mod tests {
 
     #[test]
     fn accepts_generic_self_tail_recursive_method() {
-        let method: syn::ImplItemMethod = parse_quote! {
+        let method: syn::ImplItemFn = parse_quote! {
             fn countdown<T: Copy>(&self, n: u32, value: T) -> T {
                 if n > 0 {
                     tailcall::call! { self.countdown(n - 1, value) }
@@ -416,7 +458,7 @@ mod tests {
 
     #[test]
     fn accepts_result_returning_self_tail_recursive_method_without_try() {
-        let method: syn::ImplItemMethod = parse_quote! {
+        let method: syn::ImplItemFn = parse_quote! {
             fn countdown(&self, n: u32) -> Result<u32, ()> {
                 if n > 0 {
                     tailcall::call! { self.countdown(n - 1) }

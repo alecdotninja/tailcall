@@ -192,7 +192,7 @@ fn sum(n: u64) -> u64 {
 ```
 
 
-### Recommended Pattern: Tail-Recursive Helper
+### Tail-Recursive Helper
 
 ```rust
 use tailcall::tailcall;
@@ -299,8 +299,7 @@ cargo bench -p std-integration --no-run
 
 `tailcall` and `tailcall-impl` are released together.
 
-1. Update the shared workspace version in `Cargo.toml`.
-   Also update the versions in `tailcall/Cargo.toml` and `tailcall-impl/Cargo.toml`.
+1. Update the versions in `tailcall/Cargo.toml` and `tailcall-impl/Cargo.toml`.
 2. Run the release checks:
 
 ```bash

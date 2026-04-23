@@ -8,11 +8,11 @@ keywords.workspace = true
 categories.workspace = true
 license.workspace = true
 authors.workspace = true
-version = "2.2.2"
+version = "2.3.0"
 edition.workspace = true
 
 [dependencies]
-tailcall_proc_macro = { package = "tailcall-impl", path = "../tailcall-proc-macro", version = "2.2.2" }
+tailcall_proc_macro = { package = "tailcall-impl", path = "../tailcall-proc-macro", version = "2.3.0" }
 
 [features]
 default = []

@@ -2,7 +2,7 @@ use syn::{
     parse2,
     visit::{self, Visit},
     Expr, ExprCall, ExprMacro, ExprMethodCall, ExprPath, FnArg, Ident, ImplItemMethod, ItemFn,
-    ItemMacro, Pat, PatIdent, PatType, Path, ReturnType, Type,
+    ItemMacro, Pat, PatIdent, PatType, Path,
 };
 
 use crate::call_syntax::is_tailcall_macro;
@@ -18,10 +18,6 @@ pub fn is_simple_self_tail_recursive_method(method: &ImplItemMethod) -> bool {
 }
 
 fn analyze(item_fn: &ItemFn) -> (bool, bool) {
-    if returns_result(&item_fn.sig.output) {
-        return (false, false);
-    }
-
     let mut analyzer = SelfTailAnalyzer {
         fn_ident: &item_fn.sig.ident,
         arg_idents: function_arg_idents(&item_fn.sig.inputs),
@@ -33,10 +29,6 @@ fn analyze(item_fn: &ItemFn) -> (bool, bool) {
 }
 
 fn analyze_method(method: &ImplItemMethod) -> (bool, bool) {
-    if returns_result(&method.sig.output) {
-        return (false, false);
-    }
-
     let mut analyzer = SelfTailMethodAnalyzer {
         method_ident: &method.sig.ident,
         arg_idents: function_arg_idents(&method.sig.inputs),
@@ -45,20 +37,6 @@ fn analyze_method(method: &ImplItemMethod) -> (bool, bool) {
     };
     analyzer.visit_block(&method.block);
     (analyzer.eligible, analyzer.saw_self_tailcall)
-}
-
-fn returns_result(output: &ReturnType) -> bool {
-    match output {
-        ReturnType::Default => false,
-        ReturnType::Type(_, ty) => match &**ty {
-            Type::Path(type_path) => type_path
-                .path
-                .segments
-                .last()
-                .is_some_and(|segment| segment.ident == "Result"),
-            _ => false,
-        },
-    }
 }
 
 struct SelfTailAnalyzer<'a> {
@@ -405,6 +383,22 @@ mod tests {
     }
 
     #[test]
+    fn accepts_result_returning_self_tail_recursion_without_try() {
+        let item_fn: syn::ItemFn = parse_quote! {
+            fn countdown(n: u32) -> Result<u32, ()> {
+                if n > 0 {
+                    tailcall::call! { countdown(n - 1) }
+                } else {
+                    Ok(0)
+                }
+            }
+        };
+
+        assert_eq!(analyze(&item_fn), (true, true));
+        assert!(is_simple_self_tail_recursive(&item_fn));
+    }
+
+    #[test]
     fn accepts_generic_self_tail_recursive_method() {
         let method: syn::ImplItemMethod = parse_quote! {
             fn countdown<T: Copy>(&self, n: u32, value: T) -> T {
@@ -412,6 +406,22 @@ mod tests {
                     tailcall::call! { self.countdown(n - 1, value) }
                 } else {
                     value
+                }
+            }
+        };
+
+        assert_eq!(analyze_method(&method), (true, true));
+        assert!(is_simple_self_tail_recursive_method(&method));
+    }
+
+    #[test]
+    fn accepts_result_returning_self_tail_recursive_method_without_try() {
+        let method: syn::ImplItemMethod = parse_quote! {
+            fn countdown(&self, n: u32) -> Result<u32, ()> {
+                if n > 0 {
+                    tailcall::call! { self.countdown(n - 1) }
+                } else {
+                    Ok(0)
                 }
             }
         };

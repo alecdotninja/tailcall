@@ -34,7 +34,7 @@ jobs:
         run: cargo build --all --release
 
   fmt:
-    name: ✨ Check Formatting
+    name: ✨ Format
     runs-on: ubuntu-latest
 
     steps:
@@ -64,7 +64,7 @@ jobs:
         run: cargo test --all
 
   test_miri:
-    name: 🔬 Test (Miri)
+    name: 🔬 Miri
     runs-on: ubuntu-latest
 
     steps:
